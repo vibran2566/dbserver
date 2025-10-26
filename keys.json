@@ -8,9 +8,10 @@
     },
     {
       "key": "KEY-XJT9FO4C",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-26T18:02:40.065Z"
+      "createdAt": "2025-10-26T18:02:40.065Z",
+      "usedAt": "2025-10-26T21:03:04.765Z"
     },
     {
       "key": "KEY-VSBEGBK8",
