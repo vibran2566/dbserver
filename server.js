@@ -128,6 +128,20 @@ app.post('/api/admin/add-keys', requireAdmin, async (req, res) => {
   }
 });
 
+app.get("/api/admin/list-keys", (req, res) => {
+  const token = req.headers["x-admin-token"];
+  if (token !== process.env.ADMIN_TOKEN) {
+    return res.status(403).json({ ok: false, error: "unauthorized" });
+  }
+
+  try {
+    const keys = JSON.parse(fs.readFileSync("keys.json", "utf8"));
+    res.json({ ok: true, keys });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: "read_failed" });
+  }
+});
+
 app.post('/api/admin/revoke', requireAdmin, async (req, res) => {
   try {
     const key = normalizeKey(req.body?.key);
