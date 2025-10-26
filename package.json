@@ -13,5 +13,6 @@
     "express": "^4.19.2",
     "express-rate-limit": "^7.1.5",
     "morgan": "^1.10.0"
+    "node-fetch": "^3.3.2"
   }
 }
