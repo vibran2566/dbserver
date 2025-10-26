@@ -41,9 +41,10 @@
     },
     {
       "key": "KEY-UMC8LRYA",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-26T23:44:27.782Z"
+      "createdAt": "2025-10-26T23:44:27.782Z",
+      "usedAt": "2025-10-26T23:45:53.630Z"
     }
   ]
 }
