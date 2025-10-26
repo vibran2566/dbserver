@@ -20,9 +20,9 @@ app.use(express.json({ limit: '128kb' }));
 app.use(cors({ origin: true, credentials: false }));
 
 // ---------- Simple key store using a JSON file ----------
-async function readKeys() {
+function readKeys() {
   try {
-    const txt = await fs.readFile(KEYS_FILE, 'utf-8');
+    const txt = fs.readFileSync(KEYS_FILE, 'utf8');
     const data = JSON.parse(txt);
     if (!Array.isArray(data.keys)) data.keys = [];
     return data;
@@ -31,6 +31,7 @@ async function readKeys() {
     throw e;
   }
 }
+
 
 async function writeKeys(data) {
   const tmp = KEYS_FILE + '.tmp';
