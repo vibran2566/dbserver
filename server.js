@@ -108,25 +108,39 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-app.post('/api/admin/add-keys', requireAdmin, async (req, res) => {
-  try {
-    const keys = Array.isArray(req.body?.keys) ? req.body.keys.map(normalizeKey).filter(Boolean) : [];
-    if (!keys.length) return res.status(400).json({ ok: false, error: 'no_keys' });
-    const store = await readKeys();
-    let added = 0;
-    for (const k of keys) {
-      if (!store.keys.find(x => x.key === k)) {
-        store.keys.push({ key: k, used: false, revoked: false, createdAt: new Date().toISOString() });
-        added++;
-      }
-    }
-    await writeKeys(store);
-    res.json({ ok: true, added, total: store.keys.length });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ ok: false, error: 'server_error' });
+// Add new keys (admin only)
+app.post("/api/admin/add-keys", (req, res) => {
+  const token = req.headers["x-admin-token"];
+  if (token !== process.env.ADMIN_TOKEN) {
+    return res.status(403).json({ ok: false, error: "unauthorized" });
   }
+
+  const body = req.body;
+  if (!body || !Array.isArray(body.keys)) {
+    return res.status(400).json({ ok: false, error: "invalid_request" });
+  }
+
+  let keys = {};
+  try {
+    keys = JSON.parse(fs.readFileSync("keys.json", "utf8"));
+  } catch (e) {
+    console.warn("No keys.json found or invalid, creating new one");
+  }
+
+  const now = new Date().toISOString();
+  const added = [];
+
+  body.keys.forEach(k => {
+    if (!keys[k]) {
+      keys[k] = { used: false, revoked: false, createdAt: now };
+      added.push(k);
+    }
+  });
+
+  fs.writeFileSync("keys.json", JSON.stringify(keys, null, 2));
+  res.json({ ok: true, added });
 });
+
 
 app.get("/api/admin/list-keys", (req, res) => {
   const token = req.headers["x-admin-token"];
