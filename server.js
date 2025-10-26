@@ -156,6 +156,30 @@ app.get("/api/admin/list-keys", (req, res) => {
   }
 });
 
+// Register (redeem) a product key
+app.post("/api/register", (req, res) => {
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
+
+  const data = readKeys();
+  const found = data.keys.find(k => k.key === key);
+
+  if (!found) {
+    return res.status(404).json({ ok: false, error: "unredeemed" });
+  }
+  if (found.used) {
+    return res.status(400).json({ ok: false, error: "already_used" });
+  }
+
+  // Mark key as used and save
+  found.used = true;
+  found.usedAt = new Date().toISOString();
+  writeKeys(data);
+
+  return res.json({ ok: true, message: "Key registered successfully" });
+});
+
+
 app.post('/api/admin/revoke', requireAdmin, async (req, res) => {
   try {
     const key = normalizeKey(req.body?.key);
