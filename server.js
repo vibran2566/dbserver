@@ -2,7 +2,7 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import fs from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
 import morgan from 'morgan';
 import { fileURLToPath } from 'url';
