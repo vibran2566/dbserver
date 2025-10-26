@@ -15,9 +15,10 @@
     },
     {
       "key": "KEY-VSBEGBK8",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-26T18:02:40.065Z"
+      "createdAt": "2025-10-26T18:02:40.065Z",
+      "usedAt": "2025-10-26T22:24:01.117Z"
     },
     {
       "key": "KEY-9RZKKG9C",
