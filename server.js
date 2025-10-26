@@ -19,38 +19,54 @@ app.use(morgan('tiny'));
 app.use(express.json({ limit: '128kb' }));
 app.use(cors({ origin: true, credentials: false }));
 
+
+
+
+
 // ---------- Simple key store using a JSON file ----------
 
-async function readKeys() {
+// ---------- Key store helpers (async, fs/promises) ----------
+function normalizeKey(k) {
+  return String(k || '').trim();
+}
+
+// Read as a MAP. Auto-migrate if file is { keys: [...] } array.
+async function readStore() {
   try {
-    const txt = await fs.readFile(KEYS_FILE, 'utf-8');
-    const data = JSON.parse(txt || '{}');
-
-    // If file is already a map: { "KEY": {..}, "KEY2": {..} }
-    if (data && !Array.isArray(data.keys)) return data;
-
-    // Auto-migrate legacy array format: { keys: [ {key, used, ...}, ... ] }
+    const txt = await fs.readFile(KEYS_FILE, 'utf8');
+    const json = txt.trim() ? JSON.parse(txt) : {};
+    if (json && !Array.isArray(json.keys)) {
+      // Already a map: { "KEY": {..}, ... }
+      return json;
+    }
+    // Legacy array shape: { keys: [ { key, used, revoked, ... }, ... ] }
     const map = {};
-    for (const e of (data.keys || [])) {
-      if (e && e.key) map[String(e.key)] = { ...e };
+    for (const e of (json.keys || [])) {
+      if (e && e.key) map[e.key] = { used: !!e.used, revoked: !!e.revoked, createdAt: e.createdAt || new Date().toISOString(), usedAt: e.usedAt };
     }
     return map;
   } catch (e) {
-    if (e.code === 'ENOENT') return {}; // empty map
+    if (e.code === 'ENOENT') return {}; // no file yet
     throw e;
   }
 }
 
-async function writeKeys(map) {
+async function writeStore(map) {
   const tmp = KEYS_FILE + '.tmp';
   await fs.writeFile(tmp, JSON.stringify(map, null, 2));
   await fs.rename(tmp, KEYS_FILE);
 }
 
-
-function normalizeKey(k) {
-  return String(k || '').trim();
+// Admin guard (uses your X-Admin-Token header)
+function requireAdmin(req, res, next) {
+  const token = req.headers['x-admin-token'];
+  if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) {
+    return res.status(403).json({ ok: false, error: 'unauthorized' });
+  }
+  next();
 }
+
+
 
 // ---------- Rate limits ----------
 const redeemLimiter = rateLimit({
@@ -111,100 +127,59 @@ app.post('/api/license/check', async (req, res) => {
 });
 
 
-// ---------- Admin endpoints (token required) ----------
-function requireAdmin(req, res, next) {
-  const t = req.headers['x-admin-token'] || '';
-  if (!ADMIN_TOKEN || t !== ADMIN_TOKEN) {
-    return res.status(401).json({ ok: false, error: 'unauthorized' });
-  }
-  next();
-}
-
-// Add new keys (admin only)
-app.post("/api/admin/add-keys", (req, res) => {
-  const token = req.headers["x-admin-token"];
-  if (token !== process.env.ADMIN_TOKEN) {
-    return res.status(403).json({ ok: false, error: "unauthorized" });
-  }
-
-  const body = req.body;
-  if (!body || !Array.isArray(body.keys)) {
-    return res.status(400).json({ ok: false, error: "invalid_request" });
-  }
-
-  let keys = {};
+// Add keys (admin)
+app.post('/api/admin/add-keys', requireAdmin, async (req, res) => {
   try {
-    keys = JSON.parse(fs.readFileSync("keys.json", "utf8"));
-  } catch (e) {
-    console.warn("No keys.json found or invalid, creating new one");
-  }
-
-  const now = new Date().toISOString();
-  const added = [];
-
-  body.keys.forEach(k => {
-    if (!keys[k]) {
-      keys[k] = { used: false, revoked: false, createdAt: now };
-      added.push(k);
+    const list = Array.isArray(req.body?.keys) ? req.body.keys : null;
+    if (!list || !list.length) {
+      return res.status(400).json({ ok: false, error: 'invalid_request', hint: 'body must be { "keys": ["K1","K2"] }' });
     }
-  });
 
-  fs.writeFileSync("keys.json", JSON.stringify(keys, null, 2));
-  res.json({ ok: true, added });
-});
+    const store = await readStore();
+    const now = new Date().toISOString();
+    const added = [];
 
+    for (const raw of list) {
+      const k = normalizeKey(raw);
+      if (!k) continue;
+      if (!store[k]) {
+        store[k] = { used: false, revoked: false, createdAt: now };
+        added.push(k);
+      }
+    }
 
-app.get("/api/admin/list-keys", async (req, res) => {
-  const token = req.headers["x-admin-token"];
-  if (token !== process.env.ADMIN_TOKEN) {
-    return res.status(403).json({ ok: false, error: "unauthorized" });
-  }
-  try {
-    const keys = await readKeys();
-    res.json({ ok: true, keys });
+    await writeStore(store);
+    res.json({ ok: true, added, total: Object.keys(store).length });
   } catch (err) {
-    res.status(500).json({ ok: false, error: "read_failed" });
+    console.error('ADD-KEYS error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
   }
 });
 
-
-// Register (redeem) a product key
-app.post("/api/register", (req, res) => {
-  const { key } = req.body;
-  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
-
-  const data = readKeys();
-  const found = data.keys.find(k => k.key === key);
-
-  if (!found) {
-    return res.status(404).json({ ok: false, error: "unredeemed" });
+// List keys (admin)
+app.get('/api/admin/list-keys', requireAdmin, async (_req, res) => {
+  try {
+    const store = await readStore();
+    res.json({ ok: true, keys: store });
+  } catch (err) {
+    console.error('LIST-KEYS error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
   }
-  if (found.used) {
-    return res.status(400).json({ ok: false, error: "already_used" });
-  }
-
-  // Mark key as used and save
-  found.used = true;
-  found.usedAt = new Date().toISOString();
-  writeKeys(data);
-
-  return res.json({ ok: true, message: "Key registered successfully" });
 });
 
-
+// Revoke / Unrevoke (admin)
 app.post('/api/admin/revoke', requireAdmin, async (req, res) => {
   try {
     const key = normalizeKey(req.body?.key);
     if (!key) return res.status(400).json({ ok: false, error: 'missing_key' });
-    const store = await readKeys();
-    const entry = store.keys.find(k => k.key === key);
-    if (!entry) return res.status(404).json({ ok: false, error: 'not_found' });
-    entry.revoked = true;
-    entry.revokedAt = new Date().toISOString();
-    await writeKeys(store);
+    const store = await readStore();
+    if (!store[key]) return res.status(404).json({ ok: false, error: 'not_found' });
+    store[key].revoked = true;      // <-- make sure this is lowercase true
+    store[key].revokedAt = new Date().toISOString();
+    await writeStore(store);
     res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error('REVOKE error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
   }
 });
@@ -213,15 +188,55 @@ app.post('/api/admin/unrevoke', requireAdmin, async (req, res) => {
   try {
     const key = normalizeKey(req.body?.key);
     if (!key) return res.status(400).json({ ok: false, error: 'missing_key' });
-    const store = await readKeys();
-    const entry = store.keys.find(k => k.key === key);
-    if (!entry) return res.status(404).json({ ok: false, error: 'not_found' });
-    entry.revoked = false;
-    delete entry.revokedAt;
-    await writeKeys(store);
+    const store = await readStore();
+    if (!store[key]) return res.status(404).json({ ok: false, error: 'not_found' });
+    store[key].revoked = false;
+    delete store[key].revokedAt;
+    await writeStore(store);
     res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error('UNREVOKE error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
+  }
+});
+
+// Rate-limited manual redeem (you already have redeemLimiter configured)
+app.post('/api/license/redeem', redeemLimiter, async (req, res) => {
+  try {
+    const key = normalizeKey(req.body?.key);
+    if (!key) return res.status(400).json({ ok: false, error: 'missing_key' });
+
+    const store = await readStore();
+    const entry = store[key];
+    if (!entry)        return res.status(404).json({ ok: false, error: 'invalid_key' });
+    if (entry.revoked) return res.status(403).json({ ok: false, error: 'revoked' });
+    if (entry.used)    return res.status(409).json({ ok: false, error: 'already_used' });
+
+    entry.used = true;
+    entry.usedAt = new Date().toISOString();
+    await writeStore(store);
+    res.json({ ok: true, used: true, usedAt: entry.usedAt });
+  } catch (err) {
+    console.error('REDEEM error:', err);
+    res.status(500).json({ ok: false, error: 'server_error' });
+  }
+});
+
+// Auto check (use once per page load in your script)
+app.post('/api/license/check', async (req, res) => {
+  try {
+    const key = normalizeKey(req.body?.key);
+    if (!key) return res.status(400).json({ ok: false, error: 'missing_key' });
+
+    const store = await readStore();
+    const entry = store[key];
+    if (!entry)        return res.status(404).json({ ok: false, error: 'invalid_or_unredeemed' });
+    if (entry.revoked) return res.status(403).json({ ok: false, error: 'revoked' });
+    if (!entry.used)   return res.status(403).json({ ok: false, error: 'unredeemed' });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('CHECK error:', err);
     res.status(500).json({ ok: false, error: 'server_error' });
   }
 });
