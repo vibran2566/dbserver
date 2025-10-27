@@ -16,9 +16,10 @@
     },
     {
       "key": "KEY-0VLZUM2T",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T00:28:46.601Z"
+      "createdAt": "2025-10-27T00:28:46.601Z",
+      "usedAt": "2025-10-27T00:29:50.192Z"
     }
   ]
 }
