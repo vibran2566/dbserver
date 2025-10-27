@@ -91,9 +91,10 @@
     },
     {
       "key": "KEY-YWGRVY56",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T13:56:47.704Z"
+      "createdAt": "2025-10-27T13:56:47.704Z",
+      "usedAt": "2025-10-27T14:00:08.941Z"
     }
   ]
 }
