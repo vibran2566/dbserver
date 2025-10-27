@@ -36,9 +36,11 @@
     },
     {
       "key": "KEY-ICRIJDD4",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T00:42:53.449Z"
+      "createdAt": "2025-10-27T00:42:53.449Z",
+      "usedAt": "2025-10-27T22:46:52.601Z",
+      "boundProof": "f7361e79ab9132d911a53f7a16861c1e09429d6001c02fe628bc19a7711c4bfa"
     },
     {
       "key": "KEY-R5NRTLR9",
