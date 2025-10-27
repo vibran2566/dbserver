@@ -56,9 +56,10 @@
     },
     {
       "key": "KEY-1YSLRSR3",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T00:58:06.541Z"
+      "createdAt": "2025-10-27T00:58:06.541Z",
+      "usedAt": "2025-10-27T00:58:16.370Z"
     }
   ]
 }
