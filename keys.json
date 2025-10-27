@@ -70,9 +70,10 @@
     },
     {
       "key": "KEY-6HV1O3AM",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T01:03:47.060Z"
+      "createdAt": "2025-10-27T01:03:47.060Z",
+      "usedAt": "2025-10-27T01:03:58.566Z"
     }
   ]
 }
