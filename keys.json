@@ -30,9 +30,10 @@
     },
     {
       "key": "KEY-RA0A38CI",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-26T23:44:01.712Z"
+      "createdAt": "2025-10-26T23:44:01.712Z",
+      "usedAt": "2025-10-27T00:03:20.583Z"
     },
     {
       "key": "KEY-G5CYOA0S",
