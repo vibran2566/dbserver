@@ -9,9 +9,10 @@
     },
     {
       "key": "KEY-G8WUDGYT",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T00:19:43.714Z"
+      "createdAt": "2025-10-27T00:19:43.714Z",
+      "usedAt": "2025-10-27T00:27:22.324Z"
     }
   ]
 }
