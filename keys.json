@@ -2,9 +2,10 @@
   "keys": [
     {
       "key": "EXAMPLE-KEY-123",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-25T00:00:00.000Z"
+      "createdAt": "2025-10-25T00:00:00.000Z",
+      "usedAt": "2025-10-27T00:01:38.660Z"
     },
     {
       "key": "KEY-XJT9FO4C",
