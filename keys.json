@@ -42,9 +42,10 @@
     },
     {
       "key": "KEY-R5NRTLR9",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T00:44:28.229Z"
+      "createdAt": "2025-10-27T00:44:28.229Z",
+      "usedAt": "2025-10-27T00:44:54.454Z"
     }
   ]
 }
