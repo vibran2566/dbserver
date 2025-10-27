@@ -129,41 +129,53 @@ app.post("/api/admin/revoke", async (req, res) => {
   }
 });
 
-// 🧾 Register / redeem a key (once only)
+// 🧾 Register / redeem a key (only once)
 app.post("/api/register", async (req, res) => {
   const { key } = req.body;
   if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
   try {
     const { data, sha } = await loadKeys();
     const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok: false, error: "unredeemed" });
+    if (!found) return res.status(404).json({ ok: false, error: "not_found" });
     if (found.revoked) return res.status(403).json({ ok: false, error: "revoked" });
-    if (found.used) return res.status(400).json({ ok: false, error: "already_used" });
+    if (found.used) return res.status(409).json({ ok: false, error: "already_used", used: true });
+
     found.used = true;
     found.usedAt = new Date().toISOString();
     await saveKeys(data, sha);
-    res.json({ ok: true });
+    res.status(200).json({ ok: true, used: true });
   } catch (err) {
     console.error("register error:", err);
     res.status(500).json({ ok: false, error: "write_failed" });
   }
 });
 
+
 // ✅ Validate key (for the client)
+// ✅ Validate key (eligibility check for the client)
+// 200 + { ok:true, usable:true, used:false }  → can be redeemed now
+// 409 + { ok:false, error:"already_used", used:true } → reject
+// 403 + { ok:false, error:"revoked" } → reject
+// 404 + { ok:false, error:"not_found" } → reject
 app.post("/api/validate", async (req, res) => {
   const { key } = req.body;
   if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
+
   try {
     const { data } = await loadKeys();
     const found = data.keys.find(k => k.key === key);
-    if (!found || found.revoked || !found.used)
-      return res.json({ ok: false, valid: false });
-    res.json({ ok: true, valid: true });
+    if (!found) return res.status(404).json({ ok: false, error: "not_found" });
+    if (found.revoked) return res.status(403).json({ ok: false, error: "revoked" });
+    if (found.used) return res.status(409).json({ ok: false, error: "already_used", used: true });
+
+    // Not revoked, not used → eligible
+    return res.status(200).json({ ok: true, usable: true, used: false });
   } catch (err) {
     console.error("validate error:", err);
     res.status(500).json({ ok: false, error: "read_failed" });
   }
 });
+
 
 // ---------- Default ----------
 app.get("/", (req, res) => res.send("License Server Active ✅"));
