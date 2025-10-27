@@ -98,9 +98,10 @@
     },
     {
       "key": "KEY-SIKZGHJI",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T15:03:12.805Z"
+      "createdAt": "2025-10-27T15:03:12.805Z",
+      "usedAt": "2025-10-27T15:04:03.691Z"
     }
   ]
 }
