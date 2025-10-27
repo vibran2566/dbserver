@@ -63,9 +63,10 @@
     },
     {
       "key": "KEY-00MKS73R",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T01:00:48.438Z"
+      "createdAt": "2025-10-27T01:00:48.438Z",
+      "usedAt": "2025-10-27T01:00:59.506Z"
     }
   ]
 }
