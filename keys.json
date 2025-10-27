@@ -2,126 +2,15 @@
   "keys": [
     {
       "key": "EXAMPLE-KEY-123",
-      "used": true,
+      "used": false,
       "revoked": false,
       "createdAt": "2025-10-25T00:00:00.000Z",
-      "usedAt": "2025-10-27T00:01:38.660Z"
-    },
-    {
-      "key": "KEY-G8WUDGYT",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T00:19:43.714Z",
-      "usedAt": "2025-10-27T00:27:22.324Z"
-    },
-    {
-      "key": "KEY-0VLZUM2T",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T00:28:46.601Z",
-      "usedAt": "2025-10-27T00:29:50.192Z"
-    },
-    {
-      "key": "KEY-DUDP7C1F",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T00:35:55.862Z",
-      "usedAt": "2025-10-27T00:37:25.954Z"
-    },
-    {
-      "key": "KEY-FNZ96ZXZ",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T00:42:49.515Z",
-      "usedAt": "2025-10-27T22:47:38.062Z",
-      "boundProof": "66609caf6dc934603eff88dbf46e39130fdaeed521fec1ac5324b52962c4e204"
-    },
-    {
-      "key": "KEY-ICRIJDD4",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T00:42:53.449Z",
-      "usedAt": "2025-10-27T22:46:52.601Z",
-      "boundProof": "f7361e79ab9132d911a53f7a16861c1e09429d6001c02fe628bc19a7711c4bfa"
-    },
-    {
-      "key": "KEY-R5NRTLR9",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T00:44:28.229Z",
-      "usedAt": "2025-10-27T00:44:54.454Z"
-    },
-    {
-      "key": "KEY-0E04IGVE",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T00:54:57.921Z",
-      "usedAt": "2025-10-27T00:55:07.901Z"
-    },
-    {
-      "key": "KEY-1YSLRSR3",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T00:58:06.541Z",
-      "usedAt": "2025-10-27T00:58:16.370Z"
-    },
-    {
-      "key": "KEY-00MKS73R",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T01:00:48.438Z",
-      "usedAt": "2025-10-27T01:00:59.506Z"
-    },
-    {
-      "key": "KEY-6HV1O3AM",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T01:03:47.060Z",
-      "usedAt": "2025-10-27T01:03:58.566Z"
-    },
-    {
-      "key": "KEY-67376YRI",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T01:16:07.814Z",
-      "usedAt": "2025-10-27T01:16:50.626Z"
-    },
-    {
-      "key": "KEY-5KI5YNOE",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T12:58:06.957Z",
-      "usedAt": "2025-10-27T12:59:34.355Z"
-    },
-    {
-      "key": "KEY-YWGRVY56",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T13:56:47.704Z",
-      "usedAt": "2025-10-27T14:00:08.941Z"
-    },
-    {
-      "key": "KEY-SIKZGHJI",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T15:03:12.805Z",
-      "usedAt": "2025-10-27T15:04:03.691Z"
-    },
-    {
-      "key": "KEY-HHIP2IX3",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-27T15:21:05.137Z",
-      "usedAt": "2025-10-27T15:21:22.574Z",
-      "boundProof": "2de7635059c7f056b3f6444f6338dbacfb9c0d3cde4afb3c841e0401a5e888a5"
     },
     {
       "key": "KEY-U7UT50W3",
-      "used": true,
+      "used": false,
       "revoked": false,
       "createdAt": "2025-10-27T16:01:44.725Z",
-      "usedAt": "2025-10-27T16:02:07.499Z",
-      "boundProof": "a19ecd0a2a54f5f84d20d0e33fbf3a1afa4e8a5b338ff0db817ad77b14fbacb7"
     }
   ]
 }
