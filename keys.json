@@ -27,6 +27,12 @@
       "revoked": false,
       "createdAt": "2025-10-27T00:35:55.862Z",
       "usedAt": "2025-10-27T00:37:25.954Z"
+    },
+    {
+      "key": "KEY-FNZ96ZXZ",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-27T00:42:49.515Z"
     }
   ]
 }
