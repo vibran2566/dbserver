@@ -84,9 +84,10 @@
     },
     {
       "key": "KEY-5KI5YNOE",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T12:58:06.957Z"
+      "createdAt": "2025-10-27T12:58:06.957Z",
+      "usedAt": "2025-10-27T12:59:34.355Z"
     }
   ]
 }
