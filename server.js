@@ -129,10 +129,11 @@ app.post("/api/admin/revoke", async (req, res) => {
   }
 });
 
-// ✅ Validate key (strict + browser-binding)
+// ✅ Validate (with browser proof binding)
 app.post("/api/validate", async (req, res) => {
   const { key, proof } = req.body || {};
   if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
   try {
     const { data } = await loadKeys();
     const found = data.keys.find(k => k.key === key);
@@ -140,7 +141,7 @@ app.post("/api/validate", async (req, res) => {
     if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
 
     if (!found.used) {
-      // unused → may be redeemed
+      // unused → can still be redeemed
       return res.status(200).json({ ok:true, usable:true, used:false });
     }
 
@@ -148,6 +149,8 @@ app.post("/api/validate", async (req, res) => {
     if (found.boundProof && proof && proof === found.boundProof) {
       return res.status(200).json({ ok:true, valid:true, bound:true, used:true });
     }
+
+    // used but not bound or mismatch
     return res.status(409).json({ ok:false, used:true, error:"bound_mismatch" });
   } catch (err) {
     console.error("validate error:", err);
@@ -155,11 +158,13 @@ app.post("/api/validate", async (req, res) => {
   }
 });
 
+
 // 🧾 Register / redeem + bind to browser proof
 app.post("/api/register", async (req, res) => {
   const { key, proof } = req.body || {};
   if (!key)  return res.status(400).json({ ok:false, error:"missing_key" });
   if (!proof) return res.status(400).json({ ok:false, error:"missing_proof" });
+
   try {
     const { data, sha } = await loadKeys();
     const found = data.keys.find(k => k.key === key);
@@ -167,24 +172,24 @@ app.post("/api/register", async (req, res) => {
     if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
 
     if (found.used) {
-      // If already bound to this browser, allow idempotent success; otherwise reject
       if (found.boundProof && proof === found.boundProof) {
         return res.status(200).json({ ok:true, used:true, bound:true, already:true });
       }
       return res.status(409).json({ ok:false, used:true, error:"already_used" });
     }
 
-    // First redemption → bind to this browser
     found.used = true;
     found.usedAt = new Date().toISOString();
-    found.boundProof = proof;
+    found.boundProof = String(proof);  // <-- this line saves the link
     await saveKeys(data, sha);
+
     return res.status(200).json({ ok:true, used:true, bound:true });
   } catch (err) {
     console.error("register error:", err);
     res.status(500).json({ ok:false, error:"write_failed" });
   }
 });
+
 
 
 
