@@ -129,52 +129,63 @@ app.post("/api/admin/revoke", async (req, res) => {
   }
 });
 
-// 🧾 Register / redeem a key (only once)
-app.post("/api/register", async (req, res) => {
-  const { key } = req.body;
-  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
-  try {
-    const { data, sha } = await loadKeys();
-    const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok: false, error: "not_found" });
-    if (found.revoked) return res.status(403).json({ ok: false, error: "revoked" });
-    if (found.used) return res.status(409).json({ ok: false, error: "already_used", used: true });
-
-    found.used = true;
-    found.usedAt = new Date().toISOString();
-    await saveKeys(data, sha);
-    res.status(200).json({ ok: true, used: true });
-  } catch (err) {
-    console.error("register error:", err);
-    res.status(500).json({ ok: false, error: "write_failed" });
-  }
-});
-
-
-// ✅ Validate key (for the client)
-// ✅ Validate key (eligibility check for the client)
-// 200 + { ok:true, usable:true, used:false }  → can be redeemed now
-// 409 + { ok:false, error:"already_used", used:true } → reject
-// 403 + { ok:false, error:"revoked" } → reject
-// 404 + { ok:false, error:"not_found" } → reject
+// ✅ Validate key (strict + browser-binding)
 app.post("/api/validate", async (req, res) => {
-  const { key } = req.body;
-  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
-
+  const { key, proof } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
   try {
     const { data } = await loadKeys();
     const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok: false, error: "not_found" });
-    if (found.revoked) return res.status(403).json({ ok: false, error: "revoked" });
-    if (found.used) return res.status(409).json({ ok: false, error: "already_used", used: true });
+    if (!found)        return res.status(404).json({ ok:false, error:"not_found" });
+    if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
 
-    // Not revoked, not used → eligible
-    return res.status(200).json({ ok: true, usable: true, used: false });
+    if (!found.used) {
+      // unused → may be redeemed
+      return res.status(200).json({ ok:true, usable:true, used:false });
+    }
+
+    // used → must match bound proof
+    if (found.boundProof && proof && proof === found.boundProof) {
+      return res.status(200).json({ ok:true, valid:true, bound:true, used:true });
+    }
+    return res.status(409).json({ ok:false, used:true, error:"bound_mismatch" });
   } catch (err) {
     console.error("validate error:", err);
-    res.status(500).json({ ok: false, error: "read_failed" });
+    res.status(500).json({ ok:false, error:"read_failed" });
   }
 });
+
+// 🧾 Register / redeem + bind to browser proof
+app.post("/api/register", async (req, res) => {
+  const { key, proof } = req.body || {};
+  if (!key)  return res.status(400).json({ ok:false, error:"missing_key" });
+  if (!proof) return res.status(400).json({ ok:false, error:"missing_proof" });
+  try {
+    const { data, sha } = await loadKeys();
+    const found = data.keys.find(k => k.key === key);
+    if (!found)        return res.status(404).json({ ok:false, error:"not_found" });
+    if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
+
+    if (found.used) {
+      // If already bound to this browser, allow idempotent success; otherwise reject
+      if (found.boundProof && proof === found.boundProof) {
+        return res.status(200).json({ ok:true, used:true, bound:true, already:true });
+      }
+      return res.status(409).json({ ok:false, used:true, error:"already_used" });
+    }
+
+    // First redemption → bind to this browser
+    found.used = true;
+    found.usedAt = new Date().toISOString();
+    found.boundProof = proof;
+    await saveKeys(data, sha);
+    return res.status(200).json({ ok:true, used:true, bound:true });
+  } catch (err) {
+    console.error("register error:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+
 
 
 // ---------- Default ----------
