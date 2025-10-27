@@ -49,9 +49,10 @@
     },
     {
       "key": "KEY-0E04IGVE",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T00:54:57.921Z"
+      "createdAt": "2025-10-27T00:54:57.921Z",
+      "usedAt": "2025-10-27T00:55:07.901Z"
     }
   ]
 }
