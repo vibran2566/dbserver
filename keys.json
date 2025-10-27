@@ -77,9 +77,10 @@
     },
     {
       "key": "KEY-67376YRI",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T01:16:07.814Z"
+      "createdAt": "2025-10-27T01:16:07.814Z",
+      "usedAt": "2025-10-27T01:16:50.626Z"
     }
   ]
 }
