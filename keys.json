@@ -50,9 +50,10 @@
     },
     {
       "key": "KEY-EA43X9IU",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T00:14:23.149Z"
+      "createdAt": "2025-10-27T00:14:23.149Z",
+      "usedAt": "2025-10-27T00:14:59.743Z"
     }
   ]
 }
