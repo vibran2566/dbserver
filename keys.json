@@ -113,9 +113,11 @@
     },
     {
       "key": "KEY-U7UT50W3",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T16:01:44.725Z"
+      "createdAt": "2025-10-27T16:01:44.725Z",
+      "usedAt": "2025-10-27T16:02:07.499Z",
+      "boundProof": "a19ecd0a2a54f5f84d20d0e33fbf3a1afa4e8a5b338ff0db817ad77b14fbacb7"
     }
   ]
 }
