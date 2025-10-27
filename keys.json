@@ -110,6 +110,12 @@
       "createdAt": "2025-10-27T15:21:05.137Z",
       "usedAt": "2025-10-27T15:21:22.574Z",
       "boundProof": "2de7635059c7f056b3f6444f6338dbacfb9c0d3cde4afb3c841e0401a5e888a5"
+    },
+    {
+      "key": "KEY-U7UT50W3",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-27T16:01:44.725Z"
     }
   ]
 }
