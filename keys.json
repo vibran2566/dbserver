@@ -30,9 +30,11 @@
     },
     {
       "key": "KEY-FNZ96ZXZ",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T00:42:49.515Z"
+      "createdAt": "2025-10-27T00:42:49.515Z",
+      "usedAt": "2025-10-27T22:47:38.062Z",
+      "boundProof": "66609caf6dc934603eff88dbf46e39130fdaeed521fec1ac5324b52962c4e204"
     },
     {
       "key": "KEY-ICRIJDD4",
