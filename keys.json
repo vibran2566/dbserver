@@ -2,14 +2,14 @@
   "keys": [
      {
       "key": "KEY-UMC8LRYA",
-      "used": true,
+      "used": false,
       "revoked": false,
       "createdAt": "2025-10-26T23:44:27.782Z",
       "usedAt": "2025-10-26T23:45:53.630Z"
     },
     {
       "key": "KEY-EA43X9IU",
-      "used": true,
+      "used": false,
       "revoked": false,
       "createdAt": "2025-10-27T00:14:23.149Z",
       "usedAt": "2025-10-27T00:14:59.743Z"
