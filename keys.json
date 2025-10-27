@@ -1,16 +1,18 @@
 {
   "keys": [
-    {
-      "key": "EXAMPLE-KEY-123",
-      "used": false,
+     {
+      "key": "KEY-UMC8LRYA",
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-25T00:00:00.000Z",
+      "createdAt": "2025-10-26T23:44:27.782Z",
+      "usedAt": "2025-10-26T23:45:53.630Z"
     },
     {
-      "key": "KEY-U7UT50W3",
-      "used": false,
+      "key": "KEY-EA43X9IU",
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-27T16:01:44.725Z",
+      "createdAt": "2025-10-27T00:14:23.149Z",
+      "usedAt": "2025-10-27T00:14:59.743Z"
     }
   ]
 }
