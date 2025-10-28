@@ -12,6 +12,8 @@
   --panel:#1a1a1a;
   --border:#333;
   --hover:#222;
+  --red:#ef4444;
+  --green:#22c55e;
 }
 body {
   margin:0;
@@ -19,10 +21,12 @@ body {
   background:var(--bg);
   color:var(--fg);
 }
+
+/* ===== HEADER ===== */
 header {
   display:flex;
   align-items:center;
-  justify-content:center;  /* center the nav */
+  justify-content:center;
   padding:10px 16px;
   background:#111;
   border-bottom:1px solid var(--border);
@@ -33,7 +37,7 @@ header {
 
 h2 {
   position:absolute;
-  left:16px;
+  left:70px;
   color:var(--accent);
   font-weight:700;
   margin:0;
@@ -42,18 +46,21 @@ h2 {
 nav {
   display:flex;
   gap:40px;
-  position:relative;
   align-items:center;
   justify-content:center;
+  position:relative;
 }
 
 nav .menu {
   position:relative;
   cursor:pointer;
   text-align:center;
+  padding:4px 8px;
 }
 
-nav .menu:hover .dropdown { display:block; }
+nav .menu:hover .dropdown { 
+  display:block;
+}
 
 .dropdown {
   display:none;
@@ -63,11 +70,11 @@ nav .menu:hover .dropdown { display:block; }
   border-radius:8px;
   top:30px;
   left:50%;
-  transform:translateX(-50%); /* centers dropdown under its title */
+  transform:translateX(-50%);
   min-width:200px;
   box-shadow:0 4px 20px rgba(0,0,0,.6);
+  transition:opacity .15s ease;
 }
-
 .dropdown a {
   display:block;
   padding:8px 12px;
@@ -75,27 +82,28 @@ nav .menu:hover .dropdown { display:block; }
   text-decoration:none;
   text-align:center;
 }
-
 .dropdown a:hover { background:var(--hover); }
 
+/* ===== CONSOLE BUTTON ===== */
 #consoleBtn {
-  background:var(--accent);
-  color:#000;
+  position:absolute;
+  left:16px;
+  background:var(--red);
+  color:#fff;
   border:none;
   padding:6px 12px;
   border-radius:6px;
   cursor:pointer;
-  position:absolute;
-  right:16px;
+  font-weight:bold;
 }
+#consoleBtn.open { background:var(--green); }
 
-
+/* ===== MAIN CONTENT ===== */
 main {
   padding:20px;
   max-width:900px;
   margin:auto;
 }
-
 .panel {
   background:var(--panel);
   border:1px solid var(--border);
@@ -104,7 +112,6 @@ main {
   margin-bottom:20px;
   box-shadow:0 4px 20px rgba(0,0,0,.3);
 }
-
 .keycard {
   background:#121212;
   border:1px solid var(--border);
@@ -124,35 +131,68 @@ main {
   cursor:pointer;
 }
 
-/* Console overlay */
-#console {
+/* ===== CONSOLE ===== */
+#consoleBox {
   position:fixed;
-  bottom:0;
-  left:0;
-  right:0;
-  background:#000;
-  color:var(--accent);
-  border-top:1px solid var(--border);
-  padding:8px;
+  bottom:20px;
+  right:20px;
+  width:400px;
+  max-height:400px;
   display:none;
+  flex-direction:column;
+  background:#000;
+  border:1px solid var(--border);
+  border-radius:8px;
+  box-shadow:0 0 20px rgba(0,0,0,.6);
+  overflow:hidden;
+  z-index:100;
 }
-#console input {
-  width:100%;
+#consoleHeader {
+  background:#111;
+  color:var(--accent);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:6px 10px;
+  border-bottom:1px solid var(--border);
+}
+#consoleHistory {
+  flex:1;
+  overflow-y:auto;
+  padding:8px;
+  font-size:14px;
+}
+#consoleInput {
+  border:none;
+  border-top:1px solid var(--border);
   background:#000;
   color:var(--fg);
-  border:none;
-  outline:none;
+  padding:8px;
   font-family:inherit;
+  outline:none;
 }
+#infoTip {
+  display:none;
+  position:absolute;
+  background:#111;
+  color:var(--fg);
+  font-size:13px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:8px;
+  top:-120%;
+  right:0;
+  width:260px;
+}
+.info:hover #infoTip { display:block; }
 </style>
 </head>
 <body>
 
 <header>
+  <button id="consoleBtn">Console</button>
   <h2>DamnBruh Admin</h2>
   <nav>
-    <button id="consoleBtn">💻 Console</button>
-
     <div class="menu">Size
       <div class="dropdown">
         <a data-page="size-keys">All Keys</a>
@@ -171,87 +211,104 @@ main {
 </header>
 
 <main id="content">
-  <div class="panel">Select a section above.</div>
+  <div class="panel" style="text-align:center;"><h1>Welcome</h1></div>
 </main>
 
-<div id="console">
-  <input id="cmdInput" placeholder="Enter admin command, e.g. add-keys 5">
+<!-- Console -->
+<div id="consoleBox">
+  <div id="consoleHeader">
+    <span>💻 Command Console</span>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <div class="info" style="position:relative;cursor:pointer;">ℹ️
+        <div id="infoTip">
+          <b>Common Commands:</b><br>
+          list-size-keys<br>
+          list-user-keys<br>
+          add-size-keys 5<br>
+          add-user-keys 5<br>
+          revoke-size-key KEY-XXXX<br>
+          revoke-user-key KEY-XXXX
+        </div>
+      </div>
+      <span id="closeConsole" style="cursor:pointer;">❌</span>
+    </div>
+  </div>
+  <div id="consoleHistory"></div>
+  <input id="consoleInput" placeholder="Enter command...">
 </div>
-
 
 <script>
 const API = "https://dbserver-8bhx.onrender.com";
 const ADMIN_TOKEN = "vibran2566";
 
+/* ---------- Helpers ---------- */
 async function fetchJSON(url) {
   const r = await fetch(url, { headers: { "admin-token": ADMIN_TOKEN } });
   return r.json();
 }
-
-function show(html) {
-  document.getElementById("content").innerHTML = html;
+function show(html){ document.getElementById("content").innerHTML = html; }
+function log(msg){
+  const div=document.createElement("div");
+  div.textContent=msg;
+  document.getElementById("consoleHistory").appendChild(div);
+  div.scrollIntoView({behavior:"smooth"});
 }
 
-function keyCard(k) {
-  const cls = k.revoked ? "revoked" : k.used ? "used" : "";
+/* ---------- UI Builders ---------- */
+function keyCard(k){
+  const cls=k.revoked?"revoked":k.used?"used":"";
   return `<div class="keycard ${cls}">
     <b>${k.key}</b><br>
     Used: ${k.used} | Revoked: ${k.revoked}<br>
     Created: ${new Date(k.createdAt).toLocaleString()}<br>
-    ${k.usedAt ? `Used: ${new Date(k.usedAt).toLocaleString()}` : ''}
-
+    ${k.usedAt?`Used: ${new Date(k.usedAt).toLocaleString()}`:""}
   </div>`;
 }
 
-// pages
-async function showSizeKeys() {
-  const d = await fetchJSON(`${API}/api/admin/list-keys`);
+function cmdsBlock(title, lines){
+  return `<div class="panel"><h3>${title}</h3>${
+    lines.map(c=>`<div><code>${c}</code>
+    <button class="copybtn" onclick="navigator.clipboard.writeText('${c}')">Copy</button></div>`).join("")
+  }</div>`;
+}
+
+/* ---------- Pages ---------- */
+async function showSizeKeys(){
+  const d=await fetchJSON(`${API}/api/admin/list-keys`);
   show(`<div class="panel"><h3>Size Keys</h3>${d.keys.map(keyCard).join("")}</div>`);
 }
-
-async function showUserKeys() {
-  const d = await fetchJSON(`${API}/api/user/admin/list-keys`);
+async function showUserKeys(){
+  const d=await fetchJSON(`${API}/api/user/admin/list-keys`);
   show(`<div class="panel"><h3>Username Keys</h3>${d.keys.map(keyCard).join("")}</div>`);
 }
-
-async function showUserList() {
-  const d = await fetchJSON(`${API}/api/user/mapping`);
-  let html = `<div class="panel"><h3>Saved Usernames</h3>`;
-  for (const [id,p] of Object.entries(d.players||{})) {
-    html += `<div class="keycard">
+async function showUserList(){
+  const d=await fetchJSON(`${API}/api/user/mapping`);
+  let html=`<div class="panel"><h3>Saved Usernames</h3>`;
+  for(const [id,p] of Object.entries(d.players||{})){
+    html+=`<div class="keycard">
       <b>${p.realName||"(unverified)"} — ${id}</b><br>
       <i>Top 3:</i> ${p.topUsernames.map(t=>`${t.name} (${t.count})`).join(", ")}
     </div>`;
   }
-  html += `</div>`;
+  html+=`</div>`;
   show(html);
 }
-
-function cmdsBlock(title, lines) {
-  return `<div class="panel"><h3>${title}</h3>${
-    lines.map(c=>`<div><code>${c}</code><button class="copybtn" onclick="navigator.clipboard.writeText('${c.replace(/'/g,"\\'")}')">Copy</button></div>`).join("")
-  }</div>`;
+function showSizeCmds(){
+  show(cmdsBlock("Size Commands",[
+    "list-size-keys",
+    "add-size-keys 5",
+    "revoke-size-key KEY-XXXX"
+  ]));
 }
-
-function showSizeCmds() {
-  show(cmdsBlock("Size Commands", [
-    `curl -X GET ${API}/api/admin/list-keys -H "admin-token: ${ADMIN_TOKEN}"`,
-    `curl -X POST ${API}/api/admin/add-keys -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"count":10}'`,
-    `curl -X POST ${API}/api/admin/revoke -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"key":"KEY-XXXX"}'`
+function showUserCmds(){
+  show(cmdsBlock("Username Commands",[
+    "list-user-keys",
+    "add-user-keys 5",
+    "revoke-user-key KEY-XXXX"
   ]));
 }
 
-function showUserCmds() {
-  show(cmdsBlock("Username Commands", [
-    `curl -X GET ${API}/api/user/admin/list-keys -H "admin-token: ${ADMIN_TOKEN}"`,
-    `curl -X POST ${API}/api/user/admin/add-keys -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"count":10}'`,
-    `curl -X POST ${API}/api/user/admin/revoke -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"key":"KEY-XXXX"}'`,
-    `curl -X POST ${API}/api/user/updateRealName -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"privyId":"did:privy:abc","realName":"Robert"}'`,
-    `curl -X POST ${API}/api/user/trackJoin -H "Content-Type: application/json" -d '{"privyId":"did:privy:abc","name":"Player1"}'`
-  ]));
-}
-
-// router
+/* ---------- Router ---------- */
 document.querySelectorAll(".dropdown a").forEach(a=>{
   a.onclick=()=>{
     const id=a.dataset.page;
@@ -263,65 +320,57 @@ document.querySelectorAll(".dropdown a").forEach(a=>{
   };
 });
 
-// console toggle
-const cdiv=document.getElementById("console");
-document.getElementById("consoleBtn").onclick=()=>{
-  cdiv.style.display=cdiv.style.display==="block"?"none":"block";
+/* ---------- Console Toggle ---------- */
+const btn=document.getElementById("consoleBtn");
+const box=document.getElementById("consoleBox");
+const closeBtn=document.getElementById("closeConsole");
+btn.onclick=()=>{
+  const open=box.style.display==="flex";
+  box.style.display=open?"none":"flex";
+  btn.classList.toggle("open",!open);
+};
+closeBtn.onclick=()=>{
+  box.style.display="none";
+  btn.classList.remove("open");
 };
 
-let lastPage = null;
-document.querySelectorAll(".dropdown a").forEach(a=>{
-  a.onclick=()=>{
-    document.querySelectorAll(".dropdown a").forEach(x=>x.classList.remove("active"));
-    a.classList.add("active");
-    lastPage=a.dataset.page;
-    if(lastPage==="size-keys")showSizeKeys();
-    if(lastPage==="size-cmds")showSizeCmds();
-    if(lastPage==="user-keys")showUserKeys();
-    if(lastPage==="user-cmds")showUserCmds();
-    if(lastPage==="user-list")showUserList();
-  };
-});
-setInterval(()=>{ if(lastPage) document.querySelector(`[data-page="${lastPage}"]`)?.click(); },30000);
+/* ---------- Command Runner ---------- */
+const input=document.getElementById("consoleInput");
+input.addEventListener("keydown",async e=>{
+  if(e.key!=="Enter")return;
+  const cmd=e.target.value.trim();
+  if(!cmd)return;
+  log("> "+cmd);
 
-// simple internal command runner
-document.getElementById("cmdInput").addEventListener("keydown", async e => {
-  if (e.key === "Enter") {
-    const txt = e.target.value.trim();
-    if (!txt) return;
-    const [cmd, arg] = txt.split(" ");
-    let url, body;
+  const parts=cmd.split(" ");
+  const base=parts[0];
+  const arg=parts[1];
 
-    if (cmd === "add-keys") {
-      const count = parseInt(arg || "1");
-      url = `${API}/api/admin/add-keys`;
-      body = { count };
-    } else if (cmd === "user-add") {
-      const count = parseInt(arg || "1");
-      url = `${API}/api/user/admin/add-keys`;
-      body = { count };
-    } else {
-      console.log("Unknown command:", cmd);
-      e.target.value = "";
+  try{
+    let r;
+    if(base==="list-size-keys")
+      r=await fetchJSON(`${API}/api/admin/list-keys`);
+    else if(base==="list-user-keys")
+      r=await fetchJSON(`${API}/api/user/admin/list-keys`);
+    else if(base==="add-size-keys")
+      r=await fetch(`${API}/api/admin/add-keys`,{method:"POST",headers:{"admin-token":ADMIN_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({count:parseInt(arg||1)})}).then(r=>r.json());
+    else if(base==="add-user-keys")
+      r=await fetch(`${API}/api/user/admin/add-keys`,{method:"POST",headers:{"admin-token":ADMIN_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({count:parseInt(arg||1)})}).then(r=>r.json());
+    else if(base==="revoke-size-key")
+      r=await fetch(`${API}/api/admin/revoke`,{method:"POST",headers:{"admin-token":ADMIN_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({key:arg})}).then(r=>r.json());
+    else if(base==="revoke-user-key")
+      r=await fetch(`${API}/api/user/admin/revoke`,{method:"POST",headers:{"admin-token":ADMIN_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({key:arg})}).then(r=>r.json());
+    else {
+      log("Unknown command.");
+      e.target.value="";
       return;
     }
-
-    const r = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "admin-token": ADMIN_TOKEN,
-      },
-      body: JSON.stringify(body)
-    });
-    const j = await r.json();
-    console.log("Command result:", j);
-    e.target.value = "";
+    log(JSON.stringify(r,null,2));
+  }catch(err){
+    log("Error: "+err);
   }
+  e.target.value="";
 });
-
-
-  
 </script>
 </body>
 </html>
