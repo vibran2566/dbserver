@@ -35,6 +35,12 @@
       "usernames": {
         "ghostsku": 1
       }
+    },
+    "did:privy:cmh99ia0s000ll10c9l8za010": {
+      "realName": null,
+      "usernames": {
+        "didy": 1
+      }
     }
   }
 }
