@@ -77,6 +77,12 @@
       "usernames": {
         "Dave6788888": 5
       }
+    },
+    "did:privy:cmhb4f1ja00brl50c72rawil7": {
+      "realName": null,
+      "usernames": {
+        "Shaq": 1
+      }
     }
   }
 }
