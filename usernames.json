@@ -29,7 +29,7 @@
       "usernames": {
         "AntHas110Dolla": 93,
         "AntHas114Dolla": 23,
-        "AntHas122Dolla": 6
+        "AntHas122Dolla": 9
       }
     },
     "did:privy:cmhb3tqh700p1la0btwg54ufe": {
@@ -47,7 +47,7 @@
     "did:privy:cme22dtex0017jr0b1runl9ec": {
       "realName": null,
       "usernames": {
-        "MrPeanut": 110
+        "MrPeanut": 113
       }
     },
     "did:privy:cmdmev65t00lolj0jlmyndhh6": {
@@ -59,7 +59,7 @@
     "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
       "realName": null,
       "usernames": {
-        "AC3": 110
+        "AC3": 112
       }
     },
     "did:privy:cmd8yiocv02f1lc0losnu3k2z": {
@@ -101,7 +101,7 @@
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 29
+        "WildFire": 32
       }
     },
     "did:privy:cmh9rwtqe001vl80cspfr7llc": {
@@ -143,31 +143,32 @@
     "did:privy:cmfvurqny0019k10c4y6a0o9j": {
       "realName": null,
       "usernames": {
-        "FruityBallers": 8
+        "FruityBallers": 9
       }
     },
     "did:privy:cmhb5rdr600bsl80cvy8k1799": {
       "realName": null,
       "usernames": {
-        "Cords0959013": 11
+        "Cords0959013": 14
       }
     },
     "did:privy:cmfbztsv6001vl40b2mc8ffae": {
       "realName": null,
       "usernames": {
-        "GAgafrafa": 2
+        "GAgafrafa": 2,
+        "BENaafa": 2
       }
     },
     "did:privy:cmh8dyw5606voic0caxmfx9hc": {
       "realName": null,
       "usernames": {
-        "clazs": 3
+        "clazs": 4
       }
     },
     "did:privy:cmhazijsl0049l50cgnu0hoeg": {
       "realName": null,
       "usernames": {
-        "casua1": 2
+        "casua1": 4
       }
     },
     "did:privy:cmdn6el8x015rl10ji5iec8yl": {
@@ -179,7 +180,19 @@
     "did:privy:cmb1ebnlq00vrla0mfa7ktzuz": {
       "realName": null,
       "usernames": {
-        "damnbruh": 2
+        "damnbruh": 5
+      }
+    },
+    "did:privy:cmhb5r04s0033jm0djiaye9c0": {
+      "realName": null,
+      "usernames": {
+        "jflush": 3
+      }
+    },
+    "did:privy:cmhb62b8z00g8l70c0apraltb": {
+      "realName": null,
+      "usernames": {
+        "Eggy777": 2
       }
     }
   }
