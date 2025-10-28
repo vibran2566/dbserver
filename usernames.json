@@ -1,3 +1,10 @@
 {
-  "players": {}
+  "players": {
+    "did:privy:cmhb38i5r04jxjr0cg2hu9uje": {
+      "realName": null,
+      "usernames": {
+        "heillo": 1
+      }
+    }
+  }
 }
