@@ -30,7 +30,7 @@
         "AntHas110Dolla": 93,
         "AntHas114Dolla": 23,
         "AntHas122Dolla": 27,
-        "AntHas130Dolla": 25
+        "AntHas130Dolla": 40
       }
     },
     "did:privy:cmhb3tqh700p1la0btwg54ufe": {
@@ -48,7 +48,7 @@
     "did:privy:cme22dtex0017jr0b1runl9ec": {
       "realName": null,
       "usernames": {
-        "MrPeanut": 158
+        "MrPeanut": 175
       }
     },
     "did:privy:cmdmev65t00lolj0jlmyndhh6": {
@@ -103,7 +103,7 @@
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 82
+        "WildFire": 98
       }
     },
     "did:privy:cmh9rwtqe001vl80cspfr7llc": {
@@ -145,7 +145,7 @@
     "did:privy:cmfvurqny0019k10c4y6a0o9j": {
       "realName": null,
       "usernames": {
-        "FruityBallers": 47
+        "FruityBallers": 65
       }
     },
     "did:privy:cmhb5rdr600bsl80cvy8k1799": {
@@ -159,7 +159,7 @@
       "usernames": {
         "GAgafrafa": 2,
         "BENaafa": 25,
-        "Dadad": 14
+        "Dadad": 33
       }
     },
     "did:privy:cmh8dyw5606voic0caxmfx9hc": {
@@ -183,7 +183,7 @@
     "did:privy:cmb1ebnlq00vrla0mfa7ktzuz": {
       "realName": null,
       "usernames": {
-        "damnbruh": 55
+        "damnbruh": 71
       }
     },
     "did:privy:cmhb5r04s0033jm0djiaye9c0": {
@@ -219,7 +219,7 @@
     "did:privy:cmfixrob70018l80b4spv82xt": {
       "realName": null,
       "usernames": {
-        "Nefarious": 40
+        "Nefarious": 55
       }
     },
     "did:privy:cmhb65bpf0010l70dauto3e0c": {
@@ -267,7 +267,7 @@
     "did:privy:cmfed3oze004zl20baqi9i60t": {
       "realName": null,
       "usernames": {
-        "Quillpie": 11
+        "Quillpie": 20
       }
     },
     "did:privy:cmhb6xlyw002nl20cnl32azdw": {
@@ -279,7 +279,7 @@
     "did:privy:cmeqaxcrh00umk80bi73rc1w7": {
       "realName": null,
       "usernames": {
-        "o88": 14
+        "o88": 33
       }
     },
     "did:privy:cmhb7ilbt00c0jl0cja5q1zi9": {
@@ -303,19 +303,25 @@
     "did:privy:cmhb7pykl00n4jo0do3148dr8": {
       "realName": null,
       "usernames": {
-        "ThankYou05": 7
+        "ThankYou05": 22
       }
     },
     "did:privy:cmegmmmhp00xnjr0bs8qrfdpw": {
       "realName": null,
       "usernames": {
-        "coffeeforwards": 6
+        "coffeeforwards": 24
       }
     },
     "did:privy:cmhb7bt69009zju0ciqfuoi0a": {
       "realName": null,
       "usernames": {
-        "meow_central": 1
+        "meow_central": 12
+      }
+    },
+    "did:privy:cmhb324cp052ni90dnpa0gub6": {
+      "realName": null,
+      "usernames": {
+        "TripleT": 3
       }
     }
   }
