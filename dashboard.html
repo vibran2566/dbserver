@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DamnBruh Admin Panel</title>
+<style>
+:root {
+  --bg:#0d0d0d;
+  --fg:#eaeaea;
+  --accent:#4ade80;
+  --panel:#1a1a1a;
+  --border:#333;
+  --hover:#222;
+}
+body {
+  margin:0;
+  font-family:ui-monospace,monospace;
+  background:var(--bg);
+  color:var(--fg);
+}
+header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 16px;
+  background:#111;
+  border-bottom:1px solid var(--border);
+  position:sticky;
+  top:0;
+  z-index:10;
+}
+nav { display:flex; gap:24px; position:relative; }
+nav .menu { position:relative; cursor:pointer; }
+nav .menu:hover .dropdown { display:block; }
+.dropdown {
+  display:none;
+  position:absolute;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  top:24px; left:0;
+  min-width:200px;
+  box-shadow:0 4px 20px rgba(0,0,0,.6);
+}
+.dropdown a {
+  display:block;
+  padding:8px 12px;
+  color:var(--fg);
+  text-decoration:none;
+}
+.dropdown a:hover { background:var(--hover); }
+
+#consoleBtn {
+  background:var(--accent);
+  color:#000;
+  border:none;
+  padding:6px 12px;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+main {
+  padding:20px;
+  max-width:900px;
+  margin:auto;
+}
+
+.panel {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:16px;
+  margin-bottom:20px;
+  box-shadow:0 4px 20px rgba(0,0,0,.3);
+}
+
+.keycard {
+  background:#121212;
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:10px;
+  margin:6px 0;
+}
+.keycard.used { border-left:4px solid orange; }
+.keycard.revoked { border-left:4px solid crimson; }
+.copybtn {
+  float:right;
+  background:var(--accent);
+  color:#000;
+  border:none;
+  padding:2px 6px;
+  border-radius:4px;
+  cursor:pointer;
+}
+
+/* Console overlay */
+#console {
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  background:#000;
+  color:var(--accent);
+  border-top:1px solid var(--border);
+  padding:8px;
+  display:none;
+}
+#console input {
+  width:100%;
+  background:#000;
+  color:var(--fg);
+  border:none;
+  outline:none;
+  font-family:inherit;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h2>DamnBruh Admin</h2>
+  <nav>
+    <button id="consoleBtn">💻 Console</button>
+
+    <div class="menu">Size
+      <div class="dropdown">
+        <a data-page="size-keys">All Keys</a>
+        <a data-page="size-cmds">Commands</a>
+      </div>
+    </div>
+
+    <div class="menu">Usernames
+      <div class="dropdown">
+        <a data-page="user-keys">All Keys</a>
+        <a data-page="user-list">All Saved Usernames</a>
+        <a data-page="user-cmds">Commands</a>
+      </div>
+    </div>
+  </nav>
+</header>
+
+<main id="content">
+  <div class="panel">Select a section above.</div>
+</main>
+
+<div id="console">
+  <input placeholder="Type command here... (for display only)">
+</div>
+
+<script>
+const API = "https://dbserver-8bhx.onrender.com";
+const ADMIN_TOKEN = "vibran2566";
+
+async function fetchJSON(url) {
+  const r = await fetch(url, { headers: { "admin-token": ADMIN_TOKEN } });
+  return r.json();
+}
+
+function show(html) {
+  document.getElementById("content").innerHTML = html;
+}
+
+function keyCard(k) {
+  const cls = k.revoked ? "revoked" : k.used ? "used" : "";
+  return `<div class="keycard ${cls}">
+    <b>${k.key}</b><br>
+    Used: ${k.used} | Revoked: ${k.revoked}<br>
+    Created: ${new Date(k.createdAt).toLocaleString()}
+  </div>`;
+}
+
+// pages
+async function showSizeKeys() {
+  const d = await fetchJSON(`${API}/api/admin/list-keys`);
+  show(`<div class="panel"><h3>Size Keys</h3>${d.keys.map(keyCard).join("")}</div>`);
+}
+
+async function showUserKeys() {
+  const d = await fetchJSON(`${API}/api/user/admin/list-keys`);
+  show(`<div class="panel"><h3>Username Keys</h3>${d.keys.map(keyCard).join("")}</div>`);
+}
+
+async function showUserList() {
+  const d = await fetchJSON(`${API}/api/user/mapping`);
+  let html = `<div class="panel"><h3>Saved Usernames</h3>`;
+  for (const [id,p] of Object.entries(d.players||{})) {
+    html += `<div class="keycard">
+      <b>${p.realName||"(unverified)"} — ${id}</b><br>
+      <i>Top 3:</i> ${p.topUsernames.map(t=>`${t.name} (${t.count})`).join(", ")}
+    </div>`;
+  }
+  html += `</div>`;
+  show(html);
+}
+
+function cmdsBlock(title, lines) {
+  return `<div class="panel"><h3>${title}</h3>${
+    lines.map(c=>`<div><code>${c}</code><button class="copybtn" onclick="navigator.clipboard.writeText('${c.replace(/'/g,"\\'")}')">Copy</button></div>`).join("")
+  }</div>`;
+}
+
+function showSizeCmds() {
+  show(cmdsBlock("Size Commands", [
+    `curl -X GET ${API}/api/admin/list-keys -H "admin-token: ${ADMIN_TOKEN}"`,
+    `curl -X POST ${API}/api/admin/add-keys -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"count":10}'`,
+    `curl -X POST ${API}/api/admin/revoke -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"key":"KEY-XXXX"}'`
+  ]));
+}
+
+function showUserCmds() {
+  show(cmdsBlock("Username Commands", [
+    `curl -X GET ${API}/api/user/admin/list-keys -H "admin-token: ${ADMIN_TOKEN}"`,
+    `curl -X POST ${API}/api/user/admin/add-keys -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"count":10}'`,
+    `curl -X POST ${API}/api/user/admin/revoke -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"key":"KEY-XXXX"}'`,
+    `curl -X POST ${API}/api/user/updateRealName -H "admin-token: ${ADMIN_TOKEN}" -H "Content-Type: application/json" -d '{"privyId":"did:privy:abc","realName":"Robert"}'`,
+    `curl -X POST ${API}/api/user/trackJoin -H "Content-Type: application/json" -d '{"privyId":"did:privy:abc","name":"Player1"}'`
+  ]));
+}
+
+// router
+document.querySelectorAll(".dropdown a").forEach(a=>{
+  a.onclick=()=>{
+    const id=a.dataset.page;
+    if(id==="size-keys")showSizeKeys();
+    if(id==="size-cmds")showSizeCmds();
+    if(id==="user-keys")showUserKeys();
+    if(id==="user-cmds")showUserCmds();
+    if(id==="user-list")showUserList();
+  };
+});
+
+// console toggle
+const cdiv=document.getElementById("console");
+document.getElementById("consoleBtn").onclick=()=>{
+  cdiv.style.display=cdiv.style.display==="block"?"none":"block";
+};
+</script>
+</body>
+</html>
