@@ -18,9 +18,11 @@
     },
     {
       "key": "KEY-FNQURHPJ",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-28T02:38:14.947Z"
+      "createdAt": "2025-10-28T02:38:14.947Z",
+      "usedAt": "2025-10-28T03:16:01.122Z",
+      "boundProof": "00ce1085caf1d6e5f366411d915e77b5e9d31f1e9f4b333c7f460bc1f0a51c04"
     },
     {
       "key": "KEY-D5X6XEWW",
