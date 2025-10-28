@@ -15,7 +15,7 @@
     "did:privy:cmh2iwir601t0l80dqzmz8cmo": {
       "realName": "Quanutum",
       "usernames": {
-        "VaIentino": 76
+        "VaIentino": 82
       }
     },
     "did:privy:cmhb3acaz0009ib0cs9xa7kzm": {
@@ -28,7 +28,7 @@
       "realName": "Ant",
       "usernames": {
         "AntHas110Dolla": 93,
-        "AntHas114Dolla": 6
+        "AntHas114Dolla": 12
       }
     },
     "did:privy:cmhb3tqh700p1la0btwg54ufe": {
@@ -40,13 +40,13 @@
     "did:privy:cmh99ia0s000ll10c9l8za010": {
       "realName": null,
       "usernames": {
-        "didy": 61
+        "didy": 67
       }
     },
     "did:privy:cme22dtex0017jr0b1runl9ec": {
       "realName": null,
       "usernames": {
-        "MrPeanut": 87
+        "MrPeanut": 93
       }
     },
     "did:privy:cmdmev65t00lolj0jlmyndhh6": {
@@ -58,7 +58,7 @@
     "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
       "realName": null,
       "usernames": {
-        "AC3": 92
+        "AC3": 98
       }
     },
     "did:privy:cmd8yiocv02f1lc0losnu3k2z": {
@@ -94,13 +94,31 @@
     "did:privy:cmh9lwf7n00mjl40c0qezcpe6": {
       "realName": null,
       "usernames": {
-        "Sullyy": 6
+        "Sullyy": 10
       }
     },
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 6
+        "WildFire": 12
+      }
+    },
+    "did:privy:cmh9rwtqe001vl80cspfr7llc": {
+      "realName": null,
+      "usernames": {
+        "Von_who": 6
+      }
+    },
+    "did:privy:cmhb4ptsp00h2jy0cui1lkgm3": {
+      "realName": null,
+      "usernames": {
+        "Ronelym26": 2
+      }
+    },
+    "did:privy:cmhb26siq01hoju0d0brd70mh": {
+      "realName": null,
+      "usernames": {
+        "Boutawin": 2
       }
     }
   }
