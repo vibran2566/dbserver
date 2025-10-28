@@ -35,6 +35,12 @@
       "createdAt": "2025-10-28T02:38:28.677Z",
       "usedAt": "2025-10-28T02:38:39.747Z",
       "boundProof": "9e65f9de7256ab381aa82f450e556033ac2efa79e147c06ec23bc138ef7b29e7"
+    },
+    {
+      "key": "KEY-RIXRA9NA",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-28T03:11:36.637Z"
     }
   ]
 }
