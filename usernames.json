@@ -28,7 +28,7 @@
       "realName": "Ant",
       "usernames": {
         "AntHas110Dolla": 93,
-        "AntHas114Dolla": 18
+        "AntHas114Dolla": 23
       }
     },
     "did:privy:cmhb3tqh700p1la0btwg54ufe": {
@@ -40,13 +40,13 @@
     "did:privy:cmh99ia0s000ll10c9l8za010": {
       "realName": null,
       "usernames": {
-        "didy": 73
+        "didy": 77
       }
     },
     "did:privy:cme22dtex0017jr0b1runl9ec": {
       "realName": null,
       "usernames": {
-        "MrPeanut": 99
+        "MrPeanut": 104
       }
     },
     "did:privy:cmdmev65t00lolj0jlmyndhh6": {
@@ -58,7 +58,7 @@
     "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
       "realName": null,
       "usernames": {
-        "AC3": 104
+        "AC3": 105
       }
     },
     "did:privy:cmd8yiocv02f1lc0losnu3k2z": {
@@ -100,7 +100,7 @@
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 18
+        "WildFire": 23
       }
     },
     "did:privy:cmh9rwtqe001vl80cspfr7llc": {
@@ -137,6 +137,24 @@
       "realName": null,
       "usernames": {
         "CR1MSON": 6
+      }
+    },
+    "did:privy:cmfvurqny0019k10c4y6a0o9j": {
+      "realName": null,
+      "usernames": {
+        "FruityBallers": 5
+      }
+    },
+    "did:privy:cmhb5rdr600bsl80cvy8k1799": {
+      "realName": null,
+      "usernames": {
+        "Cords0959013": 5
+      }
+    },
+    "did:privy:cmfbztsv6001vl40b2mc8ffae": {
+      "realName": null,
+      "usernames": {
+        "GAgafrafa": 2
       }
     }
   }
