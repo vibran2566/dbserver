@@ -59,6 +59,12 @@
       "usernames": {
         "AC3": 6
       }
+    },
+    "did:privy:cmd8yiocv02f1lc0losnu3k2z": {
+      "realName": null,
+      "usernames": {
+        "cotton": 1
+      }
     }
   }
 }
