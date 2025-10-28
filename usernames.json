@@ -29,7 +29,7 @@
       "usernames": {
         "AntHas110Dolla": 93,
         "AntHas114Dolla": 23,
-        "AntHas122Dolla": 16
+        "AntHas122Dolla": 19
       }
     },
     "did:privy:cmhb3tqh700p1la0btwg54ufe": {
@@ -47,7 +47,7 @@
     "did:privy:cme22dtex0017jr0b1runl9ec": {
       "realName": null,
       "usernames": {
-        "MrPeanut": 120
+        "MrPeanut": 123
       }
     },
     "did:privy:cmdmev65t00lolj0jlmyndhh6": {
@@ -59,7 +59,7 @@
     "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
       "realName": null,
       "usernames": {
-        "AC3": 118
+        "AC3": 121
       }
     },
     "did:privy:cmd8yiocv02f1lc0losnu3k2z": {
@@ -101,7 +101,7 @@
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 39
+        "WildFire": 42
       }
     },
     "did:privy:cmh9rwtqe001vl80cspfr7llc": {
@@ -143,20 +143,20 @@
     "did:privy:cmfvurqny0019k10c4y6a0o9j": {
       "realName": null,
       "usernames": {
-        "FruityBallers": 16
+        "FruityBallers": 18
       }
     },
     "did:privy:cmhb5rdr600bsl80cvy8k1799": {
       "realName": null,
       "usernames": {
-        "Cords0959013": 21
+        "Cords0959013": 24
       }
     },
     "did:privy:cmfbztsv6001vl40b2mc8ffae": {
       "realName": null,
       "usernames": {
         "GAgafrafa": 2,
-        "BENaafa": 6
+        "BENaafa": 7
       }
     },
     "did:privy:cmh8dyw5606voic0caxmfx9hc": {
@@ -168,7 +168,7 @@
     "did:privy:cmhazijsl0049l50cgnu0hoeg": {
       "realName": null,
       "usernames": {
-        "casua1": 6
+        "casua1": 7
       }
     },
     "did:privy:cmdn6el8x015rl10ji5iec8yl": {
@@ -180,7 +180,7 @@
     "did:privy:cmb1ebnlq00vrla0mfa7ktzuz": {
       "realName": null,
       "usernames": {
-        "damnbruh": 12
+        "damnbruh": 15
       }
     },
     "did:privy:cmhb5r04s0033jm0djiaye9c0": {
@@ -199,6 +199,24 @@
       "realName": null,
       "usernames": {
         "krovostok77": 3
+      }
+    },
+    "did:privy:cmhb64ree00j7jj0c6pe1qidc": {
+      "realName": null,
+      "usernames": {
+        "Bruhhhh111": 2
+      }
+    },
+    "did:privy:cmhb6jy2x002il70etfi086ty": {
+      "realName": null,
+      "usernames": {
+        "rederator": 1
+      }
+    },
+    "did:privy:cmfixrob70018l80b4spv82xt": {
+      "realName": null,
+      "usernames": {
+        "Nefarious": 1
       }
     }
   }
