@@ -22,7 +22,7 @@ body {
 header {
   display:flex;
   align-items:center;
-  justify-content:space-between;
+  justify-content:center;  /* center the nav */
   padding:10px 16px;
   background:#111;
   border-bottom:1px solid var(--border);
@@ -30,25 +30,52 @@ header {
   top:0;
   z-index:10;
 }
-nav { display:flex; gap:24px; position:relative; }
-nav .menu { position:relative; cursor:pointer; }
+
+h2 {
+  position:absolute;
+  left:16px;
+  color:var(--accent);
+  font-weight:700;
+  margin:0;
+}
+
+nav {
+  display:flex;
+  gap:40px;
+  position:relative;
+  align-items:center;
+  justify-content:center;
+}
+
+nav .menu {
+  position:relative;
+  cursor:pointer;
+  text-align:center;
+}
+
 nav .menu:hover .dropdown { display:block; }
+
 .dropdown {
   display:none;
   position:absolute;
   background:var(--panel);
   border:1px solid var(--border);
   border-radius:8px;
-  top:24px; left:0;
+  top:30px;
+  left:50%;
+  transform:translateX(-50%); /* centers dropdown under its title */
   min-width:200px;
   box-shadow:0 4px 20px rgba(0,0,0,.6);
 }
+
 .dropdown a {
   display:block;
   padding:8px 12px;
   color:var(--fg);
   text-decoration:none;
+  text-align:center;
 }
+
 .dropdown a:hover { background:var(--hover); }
 
 #consoleBtn {
@@ -58,7 +85,10 @@ nav .menu:hover .dropdown { display:block; }
   padding:6px 12px;
   border-radius:6px;
   cursor:pointer;
+  position:absolute;
+  right:16px;
 }
+
 
 main {
   padding:20px;
@@ -145,8 +175,9 @@ main {
 </main>
 
 <div id="console">
-  <input placeholder="Type command here... (for display only)">
+  <input id="cmdInput" placeholder="Enter admin command, e.g. add-keys 5">
 </div>
+
 
 <script>
 const API = "https://dbserver-8bhx.onrender.com";
@@ -166,7 +197,9 @@ function keyCard(k) {
   return `<div class="keycard ${cls}">
     <b>${k.key}</b><br>
     Used: ${k.used} | Revoked: ${k.revoked}<br>
-    Created: ${new Date(k.createdAt).toLocaleString()}
+    Created: ${new Date(k.createdAt).toLocaleString()}<br>
+    ${k.usedAt ? `Used: ${new Date(k.usedAt).toLocaleString()}` : ''}
+
   </div>`;
 }
 
@@ -251,6 +284,44 @@ document.querySelectorAll(".dropdown a").forEach(a=>{
 });
 setInterval(()=>{ if(lastPage) document.querySelector(`[data-page="${lastPage}"]`)?.click(); },30000);
 
+// simple internal command runner
+document.getElementById("cmdInput").addEventListener("keydown", async e => {
+  if (e.key === "Enter") {
+    const txt = e.target.value.trim();
+    if (!txt) return;
+    const [cmd, arg] = txt.split(" ");
+    let url, body;
+
+    if (cmd === "add-keys") {
+      const count = parseInt(arg || "1");
+      url = `${API}/api/admin/add-keys`;
+      body = { count };
+    } else if (cmd === "user-add") {
+      const count = parseInt(arg || "1");
+      url = `${API}/api/user/admin/add-keys`;
+      body = { count };
+    } else {
+      console.log("Unknown command:", cmd);
+      e.target.value = "";
+      return;
+    }
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "admin-token": ADMIN_TOKEN,
+      },
+      body: JSON.stringify(body)
+    });
+    const j = await r.json();
+    console.log("Command result:", j);
+    e.target.value = "";
+  }
+});
+
+
+  
 </script>
 </body>
 </html>
