@@ -235,6 +235,22 @@ const cdiv=document.getElementById("console");
 document.getElementById("consoleBtn").onclick=()=>{
   cdiv.style.display=cdiv.style.display==="block"?"none":"block";
 };
+
+let lastPage = null;
+document.querySelectorAll(".dropdown a").forEach(a=>{
+  a.onclick=()=>{
+    document.querySelectorAll(".dropdown a").forEach(x=>x.classList.remove("active"));
+    a.classList.add("active");
+    lastPage=a.dataset.page;
+    if(lastPage==="size-keys")showSizeKeys();
+    if(lastPage==="size-cmds")showSizeCmds();
+    if(lastPage==="user-keys")showUserKeys();
+    if(lastPage==="user-cmds")showUserCmds();
+    if(lastPage==="user-list")showUserList();
+  };
+});
+setInterval(()=>{ if(lastPage) document.querySelector(`[data-page="${lastPage}"]`)?.click(); },30000);
+
 </script>
 </body>
 </html>
