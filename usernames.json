@@ -15,7 +15,7 @@
     "did:privy:cmh2iwir601t0l80dqzmz8cmo": {
       "realName": "Quanutum",
       "usernames": {
-        "VaIentino": 96
+        "VaIentino": 97
       }
     },
     "did:privy:cmhb3acaz0009ib0cs9xa7kzm": {
@@ -48,7 +48,7 @@
     "did:privy:cme22dtex0017jr0b1runl9ec": {
       "realName": null,
       "usernames": {
-        "MrPeanut": 142
+        "MrPeanut": 144
       }
     },
     "did:privy:cmdmev65t00lolj0jlmyndhh6": {
@@ -66,7 +66,8 @@
     "did:privy:cmd8yiocv02f1lc0losnu3k2z": {
       "realName": null,
       "usernames": {
-        "cotton": 39
+        "cotton": 39,
+        "spoon": 2
       }
     },
     "did:privy:cmhb30zrx07yjl50c2tj57jre": {
@@ -102,7 +103,7 @@
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 64
+        "WildFire": 67
       }
     },
     "did:privy:cmh9rwtqe001vl80cspfr7llc": {
@@ -181,7 +182,7 @@
     "did:privy:cmb1ebnlq00vrla0mfa7ktzuz": {
       "realName": null,
       "usernames": {
-        "damnbruh": 37
+        "damnbruh": 40
       }
     },
     "did:privy:cmhb5r04s0033jm0djiaye9c0": {
@@ -217,7 +218,7 @@
     "did:privy:cmfixrob70018l80b4spv82xt": {
       "realName": null,
       "usernames": {
-        "Nefarious": 22
+        "Nefarious": 25
       }
     },
     "did:privy:cmhb65bpf0010l70dauto3e0c": {
@@ -247,19 +248,31 @@
     "did:privy:cmhar6pz803lkjo0cfvbxgfb3": {
       "realName": null,
       "usernames": {
-        "ounad": 3
+        "ounad": 6
       }
     },
     "did:privy:cmf2yssxf0023jp0b2qjkguq4": {
       "realName": null,
       "usernames": {
-        "Snskeks": 3
+        "Snskeks": 5
       }
     },
     "did:privy:cmhb77vn700ijjs0c3nqsqkh1": {
       "realName": null,
       "usernames": {
         "WahAht": 1
+      }
+    },
+    "did:privy:cmfed3oze004zl20baqi9i60t": {
+      "realName": null,
+      "usernames": {
+        "Quillpie": 1
+      }
+    },
+    "did:privy:cmhb6xlyw002nl20cnl32azdw": {
+      "realName": null,
+      "usernames": {
+        "Jarge": 1
       }
     }
   }
