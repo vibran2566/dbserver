@@ -62,6 +62,46 @@ function genKey() {
   return "KEY-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 }
 
+
+// 🕐 store incoming joins temporarily
+const joinQueue = new Map(); // privyId -> latest {name, count}
+
+function queueJoin(privyId, name) {
+  if (!privyId || !name) return;
+  const prev = joinQueue.get(privyId) || { name, count: 0 };
+  joinQueue.set(privyId, { name, count: prev.count + 1 });
+}
+
+// 🧱 your /trackJoin route stays the same except call queueJoin instead of writing immediately
+app.post("/api/user/trackJoin", (req, res) => {
+  const { privyId, name } = req.body || {};
+  if (!privyId || !name) return res.status(400).json({ ok: false, error: "missing_fields" });
+  queueJoin(privyId, name);
+  res.json({ ok: true, queued: true });
+});
+
+// 🕓 flush queued joins every 2 min 30 sec
+setInterval(async () => {
+  if (joinQueue.size === 0) return;
+  console.log(`Flushing ${joinQueue.size} queued joins…`);
+  try {
+    const { data, sha } = await loadKeys(); // same GitHub JSON load helper
+    for (const [privyId, info] of joinQueue.entries()) {
+      const { name, count } = info;
+      const player = data.players?.[privyId] || { names: {} };
+      player.names[name] = (player.names[name] || 0) + count;
+      data.players[privyId] = player;
+    }
+    await saveKeys(data, sha);
+    joinQueue.clear();
+    console.log("✅ Flushed joins successfully");
+  } catch (err) {
+    console.error("❌ Flush failed:", err);
+  }
+}, 150000); // 2 min 30 sec = 150000 ms
+
+
+
 /* =======================================================
    =============== SIZE SYSTEM (default) ==================
    ======================================================= */
