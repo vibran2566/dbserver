@@ -26,6 +26,41 @@ app.use(express.json({ limit: "256kb" }));
 app.use(cors());
 app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
 
+// 🕐 username join queue
+const usernameQueue = new Map(); // privyId -> { name, count }
+
+// add to queue instead of writing immediately
+function queueUsernameJoin(privyId, name) {
+  if (!privyId || !name) return;
+  const prev = usernameQueue.get(privyId) || { name, count: 0 };
+  usernameQueue.set(privyId, { name, count: prev.count + 1 });
+}
+
+// flush queued joins to GitHub every 2 min 30 sec
+setInterval(async () => {
+  if (usernameQueue.size === 0) return;
+  console.log(`🕓 Flushing ${usernameQueue.size} queued username joins...`);
+  try {
+    const { data, sha } = await ghLoad(USERNAMES_FILE_PATH, { players: {} });
+    if (!data.players) data.players = {};
+
+    for (const [privyId, info] of usernameQueue.entries()) {
+      const { name, count } = info;
+      if (!data.players[privyId])
+        data.players[privyId] = { realName: null, usernames: {} };
+      const user = data.players[privyId];
+      user.usernames[name] = (user.usernames[name] || 0) + count;
+    }
+
+    await ghSave(USERNAMES_FILE_PATH, data, sha);
+    usernameQueue.clear();
+    console.log("✅ Username queue flushed");
+  } catch (err) {
+    console.error("❌ Username flush failed:", err);
+  }
+}, 200000); // 
+
+
 // ---------- GitHub helpers ----------
 async function ghLoad(filePath, fallback = {}) {
   const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`;
@@ -75,10 +110,13 @@ function queueJoin(privyId, name) {
 // 🧱 your /trackJoin route stays the same except call queueJoin instead of writing immediately
 app.post("/api/user/trackJoin", (req, res) => {
   const { privyId, name } = req.body || {};
-  if (!privyId || !name) return res.status(400).json({ ok: false, error: "missing_fields" });
-  queueJoin(privyId, name);
+  if (!privyId || !name)
+    return res.status(400).json({ ok: false, error: "missing_fields" });
+
+  queueUsernameJoin(privyId, name);
   res.json({ ok: true, queued: true });
 });
+
 
 // 🕓 flush queued joins every 2 min 30 sec
 setInterval(async () => {
