@@ -15,7 +15,7 @@
     "did:privy:cmh2iwir601t0l80dqzmz8cmo": {
       "realName": "Quanutum",
       "usernames": {
-        "VaIentino": 51
+        "VaIentino": 70
       }
     },
     "did:privy:cmhb3acaz0009ib0cs9xa7kzm": {
@@ -27,7 +27,7 @@
     "did:privy:cmdssz72l01htjr0bw3060t3f": {
       "realName": "Ant",
       "usernames": {
-        "AntHas110Dolla": 74
+        "AntHas110Dolla": 93
       }
     },
     "did:privy:cmhb3tqh700p1la0btwg54ufe": {
@@ -39,13 +39,13 @@
     "did:privy:cmh99ia0s000ll10c9l8za010": {
       "realName": null,
       "usernames": {
-        "didy": 36
+        "didy": 55
       }
     },
     "did:privy:cme22dtex0017jr0b1runl9ec": {
       "realName": null,
       "usernames": {
-        "MrPeanut": 63
+        "MrPeanut": 81
       }
     },
     "did:privy:cmdmev65t00lolj0jlmyndhh6": {
@@ -57,7 +57,7 @@
     "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
       "realName": null,
       "usernames": {
-        "AC3": 67
+        "AC3": 86
       }
     },
     "did:privy:cmd8yiocv02f1lc0losnu3k2z": {
@@ -82,6 +82,12 @@
       "realName": null,
       "usernames": {
         "Shaq": 21
+      }
+    },
+    "did:privy:cmh9v3awz029qjm0d3kh73p7c": {
+      "realName": null,
+      "usernames": {
+        "broti005": 2
       }
     }
   }
