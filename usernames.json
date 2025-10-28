@@ -53,6 +53,12 @@
       "usernames": {
         "Culub": 4
       }
+    },
+    "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
+      "realName": null,
+      "usernames": {
+        "AC3": 1
+      }
     }
   }
 }
