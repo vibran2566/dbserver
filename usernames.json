@@ -41,6 +41,12 @@
       "usernames": {
         "didy": 1
       }
+    },
+    "did:privy:cme22dtex0017jr0b1runl9ec": {
+      "realName": null,
+      "usernames": {
+        "MrPeanut": 1
+      }
     }
   }
 }
