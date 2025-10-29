@@ -1,3 +1,34 @@
 {
-  "keys": []
+  "keys": [
+    {
+      "key": "KEY-9ZK32H9T",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-29T13:06:45.933Z"
+    },
+    {
+      "key": "KEY-8JD9IVNS",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-29T13:06:45.933Z"
+    },
+    {
+      "key": "KEY-XKRT7P8B",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-29T13:06:45.933Z"
+    },
+    {
+      "key": "KEY-EJJGM5VH",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-29T13:06:45.933Z"
+    },
+    {
+      "key": "KEY-4RPCPSIO",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-29T13:06:45.933Z"
+    }
+  ]
 }
