@@ -272,6 +272,68 @@ app.get("/api/admin/list-keys", async (req, res) => {
     res.status(500).json({ ok: false, error: "read_failed" });
   }
 });
+app.post("/api/admin/delete-key", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const before = data.keys.length;
+    data.keys = data.keys.filter(k => k.key !== key);
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok:true, removed: before - data.keys.length });
+  } catch (err) {
+    console.error("delete-key:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+app.post("/api/admin/unuse-key", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+
+    found.used = false;
+    delete found.usedAt;
+    delete found.boundProof;
+
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok:true, message:`${key} reset to unused` });
+  } catch (err) {
+    console.error("unuse-key:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+app.post("/api/admin/add-note", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key, note } = req.body || {};
+  if (!key || typeof note !== "string")
+    return res.status(400).json({ ok:false, error:"missing_fields" });
+
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+
+    found.note = note.trim();
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok:true, message:`Note added to ${key}` });
+  } catch (err) {
+    console.error("add-note:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
 
 app.post("/api/admin/add-keys", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
@@ -385,6 +447,88 @@ app.post("/api/user/admin/add-keys", async (req, res) => {
     await ghSave(USERKEYS_FILE_PATH, data, sha);
     res.json({ ok:true, added:count });
   } catch(err){ console.error("user-add:",err); res.status(500).json({ok:false,error:"write_failed"}); }
+});
+app.post("/api/user/admin/delete-key", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  try {
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const before = data.keys.length;
+    data.keys = data.keys.filter(k => k.key !== key);
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
+    res.json({ ok:true, removed: before - data.keys.length });
+  } catch (err) {
+    console.error("user-delete-key:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+app.post("/api/user/admin/unuse-key", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  try {
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+
+    found.used = false;
+    delete found.usedAt;
+    delete found.boundProof;
+
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
+    res.json({ ok:true, message:`${key} reset to unused` });
+  } catch (err) {
+    console.error("user-unuse-key:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+app.post("/api/user/admin/add-note", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key, note } = req.body || {};
+  if (!key || typeof note !== "string")
+    return res.status(400).json({ ok:false, error:"missing_fields" });
+
+  try {
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+
+    found.note = note.trim();
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
+    res.json({ ok:true, message:`Note added to ${key}` });
+  } catch (err) {
+    console.error("user-add-note:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+app.post("/api/user/admin/delete-player", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { privyId } = req.body || {};
+  if (!privyId) return res.status(400).json({ ok:false, error:"missing_privyId" });
+
+  try {
+    const { data, sha } = await ghLoad(USERNAMES_FILE_PATH, { players:{} });
+    if (!data.players[privyId])
+      return res.status(404).json({ ok:false, error:"not_found" });
+
+    delete data.players[privyId];
+    await ghSave(USERNAMES_FILE_PATH, data, sha);
+    res.json({ ok:true, message:`Deleted ${privyId}` });
+  } catch (err) {
+    console.error("delete-player:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
 });
 
 app.post("/api/user/admin/revoke", async (req,res)=>{
