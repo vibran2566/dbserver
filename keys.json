@@ -32,11 +32,9 @@
     },
     {
       "key": "KEY-RIXRA9NA",
-      "used": true,
+      "used": false,
       "revoked": false,
-      "createdAt": "2025-10-28T03:11:36.637Z",
-      "usedAt": "2025-10-28T03:11:47.200Z",
-      "boundProof": "7082978cd790d9923932a72026f259a87225833e7806047ca138513013347419"
+      "createdAt": "2025-10-28T03:11:36.637Z"
     },
     {
       "key": "KEY-QTF1TC07",
