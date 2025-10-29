@@ -49,10 +49,12 @@
     },
     {
       "key": "KEY-S95DOP16",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T22:29:07.655Z",
-      "note": "bnks"
+      "note": "bnks",
+      "usedAt": "2025-10-29T22:29:55.079Z",
+      "boundProof": "1ccea297da6e1df2ef54baddce191aceb426e42f3df2ce2a56ac0bfa1421aca8"
     }
   ]
 }
