@@ -425,6 +425,44 @@ input.addEventListener("keydown",async e=>{
     }).then(r => r.json());
   }
 }
+  // --- set-size-note ---
+else if (base === "set-size-note") {
+  const key = parts[1];
+  const note = parts.slice(2).join(" ");
+  if (!key || !note) {
+    log("Usage: set-size-note KEY-XXXX Your note text");
+  } else {
+    const r = await fetch(`${API}/api/admin/add-note`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "admin-token": ADMIN_TOKEN
+      },
+      body: JSON.stringify({ key, note })
+    }).then(r => r.json());
+    log(JSON.stringify(r, null, 2));
+  }
+}
+
+// --- set-user-note ---
+else if (base === "set-user-note") {
+  const key = parts[1];
+  const note = parts.slice(2).join(" ");
+  if (!key || !note) {
+    log("Usage: set-user-note KEY-XXXX Your note text");
+  } else {
+    const r = await fetch(`${API}/api/user/admin/add-note`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "admin-token": ADMIN_TOKEN
+      },
+      body: JSON.stringify({ key, note })
+    }).then(r => r.json());
+    log(JSON.stringify(r, null, 2));
+  }
+}
+
 
     else {
       log("Unknown command.");
