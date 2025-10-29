@@ -59,18 +59,30 @@ setInterval(() => {
 }, 60000);
 
 // Example API
-app.get("/api/user/mapping", (req, res) => res.json(mapping));
-app.post("/api/user/batchTrackJoin", (req, res) => {
-  const { players } = req.body;
-  for (const p of players || []) {
-    if (!mapping.players[p.privyId]) {
-      mapping.players[p.privyId] = { realName: null, usernames: {} };
+app.get("/api/user/mapping", async (req,res)=>{
+  try{
+    const {data}=await ghLoad(USERNAMES_FILE_PATH,{players:{}});
+    const out={};
+    for(const [id,obj] of Object.entries(data.players||{})){
+      const top=Object.entries(obj.usernames||{})
+        .sort((a,b)=>b[1]-a[1])
+        .slice(0,3)
+        .map(([n,c])=>({name:n,count:c}));
+
+      // 🟩 return "usernames" instead of "allUsernames"
+      out[id]={
+        realName: obj.realName || null,
+        usernames: obj.usernames || {},  // <-- add this key back
+        topUsernames: top
+      };
     }
-    mapping.players[p.privyId].usernames[p.name] =
-      (mapping.players[p.privyId].usernames[p.name] || 0) + (p.count || 1);
+    res.json({ok:true,players:out});
+  }catch(err){
+    console.error("mapping:",err);
+    res.status(500).json({ok:false,error:"read_failed"});
   }
-  res.json({ ok: true });
 });
+
 
 // 🕐 username join queue
 const usernameQueue = new Map(); // privyId -> { name, count }
