@@ -34,7 +34,7 @@
     {
       "key": "KEY-4RPCPSIO",
       "used": true,
-      "revoked": false,
+      "revoked": true,
       "createdAt": "2025-10-29T13:06:45.933Z",
       "usedAt": "2025-10-29T20:22:28.477Z",
       "boundProof": "ff31c143fef5d7cee8a458ff8887cd9ae7b6f7df9d04d1a30bafa5911e77f5d0",
