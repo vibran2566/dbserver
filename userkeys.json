@@ -35,7 +35,7 @@
     {
       "key": "KEY-6B1CS809",
       "used": true,
-      "revoked": false,
+      "revoked": true,
       "createdAt": "2025-10-29T03:12:58.618Z",
       "usedAt": "2025-10-29T04:52:10.481Z",
       "boundProof": "385445a47271e5f408466d90a00af4533ea7def80ed16de447a03ab7651e6a38"
