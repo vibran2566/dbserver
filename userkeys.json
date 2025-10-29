@@ -10,11 +10,9 @@
     },
     {
       "key": "KEY-8NACTGF6",
-      "used": true,
+      "used": false,
       "revoked": false,
-      "createdAt": "2025-10-29T02:27:20.900Z",
-      "usedAt": "2025-10-29T02:28:29.139Z",
-      "boundProof": "df8b46b423fe77c3cc1d3dfcc5f1cf20aa81274a0365deaeca39e9b2f4490738"
+      "createdAt": "2025-10-29T02:27:20.900Z"
     },
     {
       "key": "KEY-6B1CS809",
