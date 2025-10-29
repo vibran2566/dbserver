@@ -15,6 +15,12 @@
       "createdAt": "2025-10-29T00:06:48.344Z",
       "usedAt": "2025-10-29T00:06:59.280Z",
       "boundProof": "6f583584d2369a6c7c961ac59c17229f37b938c2c6c0cb3943ae1134979724b5"
+    },
+    {
+      "key": "KEY-INDKH4HT",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-29T02:22:42.647Z"
     }
   ]
 }
