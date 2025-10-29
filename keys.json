@@ -38,11 +38,9 @@
     },
     {
       "key": "KEY-QTF1TC07",
-      "used": true,
+      "used": false,
       "revoked": false,
-      "createdAt": "2025-10-28T23:07:16.605Z",
-      "usedAt": "2025-10-29T00:20:15.390Z",
-      "boundProof": "1fbdc8c1bf0f67917d0de36a4df8f551d463ae18da27f34cfafd0264d4213f70"
+      "createdAt": "2025-10-28T23:07:16.605Z"
     },
     {
       "key": "KEY-U70568ZO",
