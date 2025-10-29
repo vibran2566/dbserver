@@ -5,6 +5,8 @@ import morgan from "morgan";
 import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
+import path from "path";
 
 // Paths
 const __filename = fileURLToPath(import.meta.url);
@@ -26,11 +28,49 @@ app.use(express.static(__dirname));
 app.use(morgan("tiny"));
 app.use(express.json({ limit: "256kb" }));
 app.use(cors());
-app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
+// app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
 
 
 
+const DATA_DIR = "/data"; // persistent path on Render
+const MAPPING_FILE = path.join(DATA_DIR, "mapping.json");
 
+let mapping = { players: {} };
+
+// Load mapping on startup
+try {
+  if (fs.existsSync(MAPPING_FILE)) {
+    mapping = JSON.parse(fs.readFileSync(MAPPING_FILE, "utf-8"));
+    console.log("✅ Loaded mapping from disk");
+  } else {
+    console.log("🆕 No mapping file found — starting fresh");
+  }
+} catch (e) {
+  console.error("❌ Failed to load mapping:", e);
+}
+
+// Save periodically (every 60s)
+setInterval(() => {
+  try {
+    fs.writeFileSync(MAPPING_FILE, JSON.stringify(mapping, null, 2));
+  } catch (e) {
+    console.error("❌ Failed to save mapping:", e);
+  }
+}, 60000);
+
+// Example API
+app.get("/api/user/mapping", (req, res) => res.json(mapping));
+app.post("/api/user/batchTrackJoin", (req, res) => {
+  const { players } = req.body;
+  for (const p of players || []) {
+    if (!mapping.players[p.privyId]) {
+      mapping.players[p.privyId] = { realName: null, usernames: {} };
+    }
+    mapping.players[p.privyId].usernames[p.name] =
+      (mapping.players[p.privyId].usernames[p.name] || 0) + (p.count || 1);
+  }
+  res.json({ ok: true });
+});
 
 // 🕐 username join queue
 const usernameQueue = new Map(); // privyId -> { name, count }
