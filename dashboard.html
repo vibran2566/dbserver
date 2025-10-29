@@ -465,6 +465,31 @@ else if (base === "set-user-note") {
   }
 }
 
+// --- alert (all)(KEY-####) message ---
+else if (base === "alert") {
+  const target = parts[1]; // "all" or "KEY-####"
+  const message = parts.slice(2).join(" ");
+  if (!target || !message) {
+    log("Usage: alert (all|KEY-####) Your message");
+  } else {
+    const body = target.toLowerCase() === "all"
+      ? { target: "all", message }
+      : { target: "key", key: target, message };
+
+    const r = await fetch(`${API}/api/admin/alert`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "admin-token": ADMIN_TOKEN,
+  },
+  body: JSON.stringify(body),
+});
+
+    log(JSON.stringify(r, null, 2));
+    notify(r.ok ? "✅ Alert sent" : "❌ Failed to send alert", r.ok);
+  }
+}
+
 
     else {
       log("Unknown command.");
