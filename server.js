@@ -6,7 +6,7 @@ import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
-import path from "path";
+
 
 // Paths
 const __filename = fileURLToPath(import.meta.url);
