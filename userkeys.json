@@ -39,6 +39,12 @@
       "boundProof": "fafe8f489d2598d1c5ce4ea9a5d89ed345f4d890ad20201242b701b511ddd53c",
       "lastUsedAt": "2025-10-29T22:10:07.741Z",
       "note": "vibran PC"
+    },
+    {
+      "key": "KEY-WJOHBZB6",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-29T22:12:07.942Z"
     }
   ]
 }
