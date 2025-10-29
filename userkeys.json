@@ -1,12 +1,6 @@
 {
   "keys": [
     {
-      "key": "KEY-QSYP5AAX",
-      "used": false,
-      "revoked": false,
-      "createdAt": "2025-10-29T00:06:48.344Z"
-    },
-    {
       "key": "KEY-INDKH4HT",
       "used": true,
       "revoked": false,
