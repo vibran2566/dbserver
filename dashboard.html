@@ -271,7 +271,6 @@ function log(msg){
   document.getElementById("consoleHistory").appendChild(div);
   div.scrollIntoView({behavior:"smooth"});
 }
-/
 
 /* ✅ Step 2 — Notification Helper */
 function notify(msg, ok=true) {
@@ -282,9 +281,6 @@ function notify(msg, ok=true) {
   box.appendChild(n);
   setTimeout(() => n.remove(), 3200);
 }
-
-/* ---------- UI Builders ---------- */
-function keyCard(k){ … }
 
 /* ---------- UI Builders ---------- */
 function keyCard(k, type="size"){
