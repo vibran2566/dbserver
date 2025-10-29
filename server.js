@@ -419,21 +419,6 @@ app.post("/api/user/trackJoin", async (req,res)=>{
   }catch(err){console.error("trackJoin:",err);res.status(500).json({ok:false,error:"write_failed"});}
 });
 
-app.post("/api/user/updateRealName", async (req,res)=>{
-  if(req.header("admin-token")!==ADMIN_TOKEN)
-    return res.status(401).json({ok:false,error:"unauthorized"});
-  const {privyId,realName}=req.body||{};
-  if(!privyId||!realName)return res.status(400).json({ok:false,error:"missing_fields"});
-  try{
-    const {data,sha}=await ghLoad(USERNAMES_FILE_PATH,{players:{}});
-    if(!data.players)data.players={};
-    if(!data.players[privyId])data.players[privyId]={realName:null,usernames:{}};
-    data.players[privyId].realName=realName;
-    await ghSave(USERNAMES_FILE_PATH,data,sha);
-    res.json({ok:true});
-  }catch(err){console.error("updateRealName:",err);res.status(500).json({ok:false,error:"write_failed"});}
-});
-
 app.get("/api/user/mapping", async (req,res)=>{
   try{
     const {data}=await ghLoad(USERNAMES_FILE_PATH,{players:{}});
