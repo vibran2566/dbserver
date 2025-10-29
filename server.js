@@ -394,7 +394,7 @@ app.post("/api/validate", async (req, res) => {
     return res.status(400).json({ ok: false, error: "missing_key" });
 
   try {
-    const { data } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
     const found = data.keys.find(k => k.key === key);
 
     if (!found)
@@ -405,17 +405,17 @@ app.post("/api/validate", async (req, res) => {
     if (!found.used)
       return res.status(200).json({ ok: true, usable: true, used: false });
 
-    if (found.boundProof && proof && proof === found.boundProof)
-      // ✅ Update lastUsedAt timestamp when a key validates successfully
-try {
-  found.lastUsedAt = new Date().toISOString();
-  await ghSave(GITHUB_FILE_PATH, data); // same save method you're already using
-} catch (err) {
-  console.error("Failed to update lastUsedAt:", err);
-}
-
+    if (found.boundProof && proof && proof === found.boundProof) {
+      // ✅ Add lastUsedAt and save using the correct sha
+      try {
+        found.lastUsedAt = new Date().toISOString();
+        await ghSave(GITHUB_FILE_PATH, data, sha); // now includes sha
+      } catch (err) {
+        console.error("Failed to update lastUsedAt:", err);
+      }
 
       return res.status(200).json({ ok: true, valid: true, bound: true, used: true });
+    }
 
     return res.status(409).json({ ok: false, used: true, error: "bound_mismatch" });
 
@@ -424,6 +424,7 @@ try {
     res.status(500).json({ ok: false, error: "read_failed" });
   }
 });
+
 
 app.post("/api/register", async (req, res) => {
   const { key, proof } = req.body || {};
