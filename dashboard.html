@@ -326,6 +326,46 @@ function showUserCmds(){
   ]));
 }
 
+
+<div style="margin-top:12px">
+  <input id="cmdInput" placeholder='set-name did:privy:abc123 MyName' style="width:340px;padding:6px">
+  <button id="cmdBtn">Run</button>
+  <div id="cmdResult" style="margin-top:8px;font-family:monospace;color:#0f0"></div>
+</div>
+
+<script>
+document.getElementById("cmdBtn").onclick = async () => {
+  const cmd = document.getElementById("cmdInput").value.trim();
+  const resEl = document.getElementById("cmdResult");
+
+  if (!cmd.startsWith("set-name")) {
+    resEl.textContent = "❌ Command must start with 'set-name'";
+    return;
+  }
+
+  const parts = cmd.split(" ");
+  if (parts.length < 3) {
+    resEl.textContent = "❌ Usage: set-name did:privy:xxxxx Username";
+    return;
+  }
+
+  const [, did, ...nameParts] = parts;
+  const name = nameParts.join(" ");
+
+  try {
+    const res = await fetch("/admin/set-name", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ did, name })
+    });
+    const data = await res.json();
+    resEl.textContent = data.message || "✅ Updated";
+  } catch (e) {
+    resEl.textContent = "⚠️ Failed: " + e.message;
+  }
+};
+</script>
+
 /* ---------- Router ---------- */
 document.querySelectorAll(".dropdown a").forEach(a=>{
   a.onclick=()=>{
