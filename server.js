@@ -441,6 +441,9 @@ app.post("/api/user/register", async (req,res)=>{
 app.post("/api/user/trackJoin", async (req,res)=>{
   const {privyId,name}=req.body||{};
   if(!privyId||!name)return res.status(400).json({ok:false,error:"missing_fields"});
+   if (name.trim().toLowerCase() === "anonymous player") {
+    return res.status(200).json({ ok:true, skipped:true, reason:"default_anonymous" });
+  }
   try{
     const {data,sha}=await ghLoad(USERNAMES_FILE_PATH,{players:{}});
     if(!data.players)data.players={};
@@ -485,6 +488,7 @@ app.post("/api/user/batchTrackJoin", (req, res) => {
 
     for (const { privyId, name, count } of players) {
       if (!privyId || !name) continue;
+      if (name.trim().toLowerCase() === "anonymous player") continue;
       if (!data.players[privyId])
         data.players[privyId] = { realName: null, usernames: {} };
       const u = data.players[privyId];
