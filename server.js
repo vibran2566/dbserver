@@ -28,6 +28,10 @@ app.use(express.json({ limit: "256kb" }));
 app.use(cors());
 app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
 
+
+
+
+
 // 🕐 username join queue
 const usernameQueue = new Map(); // privyId -> { name, count }
 
@@ -367,6 +371,27 @@ app.get("/api/user/mapping", async (req,res)=>{
     res.json({ok:true,players:out});
   }catch(err){console.error("mapping:",err);res.status(500).json({ok:false,error:"read_failed"});}
 });
+
+
+app.post("/api/user/batchTrackJoin", async (req, res) => {
+  const { players } = req.body || {};
+  if (!Array.isArray(players)) return res.status(400).json({ ok: false, error: "missing_players" });
+
+  try {
+    const { data, sha } = await ghLoad(USERNAMES_FILE_PATH, { players: {} });
+    for (const { privyId, name, count } of players) {
+      if (!privyId || !name) continue;
+      if (!data.players[privyId]) data.players[privyId] = { realName: null, usernames: {} };
+      data.players[privyId].usernames[name] = (data.players[privyId].usernames[name] || 0) + count;
+    }
+    await ghSave(USERNAMES_FILE_PATH, data, sha);
+    res.json({ ok: true, added: players.length });
+  } catch (err) {
+    console.error("batchTrackJoin:", err);
+    res.status(500).json({ ok: false, error: "write_failed" });
+  }
+});
+
 
 /* =======================================================
    ================== Default & Start ====================
