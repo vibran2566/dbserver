@@ -42,9 +42,11 @@
     },
     {
       "key": "KEY-OK8BGDK2",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-10-29T04:53:24.326Z"
+      "createdAt": "2025-10-29T04:53:24.326Z",
+      "usedAt": "2025-10-29T04:56:44.246Z",
+      "boundProof": "257c053a5646e0b08ec4a35be0067003ca14416358688fded841be86758d55eb"
     }
   ]
 }
