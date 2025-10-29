@@ -506,6 +506,50 @@ app.get("/api/user/admin/list-keys", async (req, res) => {
     res.status(500).json({ ok:false, error:"read_failed" });
   }
 });
+app.post("/api/admin/add-note", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+
+  const { key, note } = req.body || {};
+  if (!key || typeof note !== "string")
+    return res.status(400).json({ ok: false, error: "missing_fields" });
+
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found)
+      return res.status(404).json({ ok: false, error: "not_found" });
+
+    found.note = note.trim();
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok: true, message: `Note added to ${key}` });
+  } catch (err) {
+    console.error("add-note:", err);
+    res.status(500).json({ ok: false, error: "write_failed" });
+  }
+});
+app.post("/api/user/admin/add-note", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+
+  const { key, note } = req.body || {};
+  if (!key || typeof note !== "string")
+    return res.status(400).json({ ok: false, error: "missing_fields" });
+
+  try {
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found)
+      return res.status(404).json({ ok: false, error: "not_found" });
+
+    found.note = note.trim();
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
+    res.json({ ok: true, message: `Note added to ${key}` });
+  } catch (err) {
+    console.error("user-add-note:", err);
+    res.status(500).json({ ok: false, error: "write_failed" });
+  }
+});
 
 app.post("/api/user/admin/add-keys", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
