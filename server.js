@@ -131,8 +131,32 @@ app.get("/api/user/mapping", async (req, res) => {
     res.status(500).json({ ok: false, error: "read_failed" });
   }
 });
+app.get("/api/user/core/download", (req, res) => {
+  const { key } = req.query;
+  // validate key if needed
+  const corePath = path.join(__dirname, "data", "core.js");
 
+  if (!fs.existsSync(corePath))
+    return res.status(404).json({ ok: false, error: "core_missing" });
 
+  res.sendFile(corePath);
+});
+
+const VERSION_PATH = path.join(__dirname, "data", "version.json");
+
+app.get("/api/user/core/meta", (req, res) => {
+  try {
+    if (!fs.existsSync(VERSION_PATH))
+      return res.status(404).json({ ok: false, error: "version_file_missing" });
+
+    const raw = fs.readFileSync(VERSION_PATH, "utf8");
+    const json = JSON.parse(raw);
+    res.json({ ok: true, ...json });
+  } catch (err) {
+    console.error("meta:", err);
+    res.status(500).json({ ok: false, error: "meta_read_failed" });
+  }
+});
 
 // 🕐 username join queue
 const usernameQueue = new Map(); // privyId -> { name, count }
