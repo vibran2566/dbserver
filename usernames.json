@@ -30,7 +30,7 @@
         "AntHas110Dolla": 93,
         "AntHas114Dolla": 23,
         "AntHas122Dolla": 27,
-        "AntHas130Dolla": 65
+        "AntHas130Dolla": 78
       }
     },
     "did:privy:cmhb3tqh700p1la0btwg54ufe": {
@@ -67,7 +67,7 @@
       "realName": null,
       "usernames": {
         "cotton": 39,
-        "spoon": 17
+        "spoon": 30
       }
     },
     "did:privy:cmhb30zrx07yjl50c2tj57jre": {
@@ -103,7 +103,7 @@
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 120
+        "WildFire": 139
       }
     },
     "did:privy:cmh9rwtqe001vl80cspfr7llc": {
@@ -159,7 +159,7 @@
       "usernames": {
         "GAgafrafa": 2,
         "BENaafa": 25,
-        "Dadad": 57
+        "Dadad": 71
       }
     },
     "did:privy:cmh8dyw5606voic0caxmfx9hc": {
@@ -183,7 +183,7 @@
     "did:privy:cmb1ebnlq00vrla0mfa7ktzuz": {
       "realName": null,
       "usernames": {
-        "damnbruh": 95
+        "damnbruh": 113
       }
     },
     "did:privy:cmhb5r04s0033jm0djiaye9c0": {
@@ -219,7 +219,7 @@
     "did:privy:cmfixrob70018l80b4spv82xt": {
       "realName": null,
       "usernames": {
-        "Nefarious": 79
+        "Nefarious": 94
       }
     },
     "did:privy:cmhb65bpf0010l70dauto3e0c": {
@@ -237,7 +237,8 @@
     "did:privy:cmdub87d0013ql40c310ignbo": {
       "realName": null,
       "usernames": {
-        "darkl3": 11
+        "darkl3": 11,
+        "Crom": 1
       }
     },
     "did:privy:cmhb6rqxl004pl20d96d624jo": {
@@ -279,7 +280,7 @@
     "did:privy:cmeqaxcrh00umk80bi73rc1w7": {
       "realName": null,
       "usernames": {
-        "o88": 58
+        "o88": 75
       }
     },
     "did:privy:cmhb7ilbt00c0jl0cja5q1zi9": {
@@ -309,13 +310,13 @@
     "did:privy:cmegmmmhp00xnjr0bs8qrfdpw": {
       "realName": null,
       "usernames": {
-        "coffeeforwards": 47
+        "coffeeforwards": 63
       }
     },
     "did:privy:cmhb7bt69009zju0ciqfuoi0a": {
       "realName": null,
       "usernames": {
-        "meow_central": 35
+        "meow_central": 52
       }
     },
     "did:privy:cmhb324cp052ni90dnpa0gub6": {
@@ -327,7 +328,31 @@
     "did:privy:cmepoe8qh004yl80bec7w02q7": {
       "realName": null,
       "usernames": {
-        "Bank": 2
+        "Bank": 16
+      }
+    },
+    "did:privy:cmh9arrrj001bjw0ckwnp5gsn": {
+      "realName": null,
+      "usernames": {
+        "Misha6791": 9
+      }
+    },
+    "did:privy:cmhb8epd5006sl50d5q2nvte8": {
+      "realName": null,
+      "usernames": {
+        "Sbeb": 6
+      }
+    },
+    "did:privy:cmhb8gcpw008mkz0bmg6clpu9": {
+      "realName": null,
+      "usernames": {
+        "cortezz": 9
+      }
+    },
+    "did:privy:cmhb656cm00fdl20cw5pd6omv": {
+      "realName": null,
+      "usernames": {
+        "hanshon": 11
       }
     }
   }
