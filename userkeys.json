@@ -1,3 +1,10 @@
 {
-  "keys": []
+  "keys": [
+    {
+      "key": "KEY-UUES85RK",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-29T12:55:50.267Z"
+    }
+  ]
 }
