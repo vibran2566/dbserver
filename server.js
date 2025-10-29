@@ -51,7 +51,7 @@ try {
 
 const USER_FILE = "/data/usernames.json";
 
-app.post("/admin/set-name", (req, res) => {
+app.post("/api/user/admin/set-name", (req, res) => {
   const { did, name } = req.body;
   if (!did?.startsWith("did:privy:") || !name) {
     return res.status(400).json({ message: "Invalid DID or name" });
