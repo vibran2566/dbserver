@@ -142,7 +142,8 @@ app.get("/api/user/core/download", (req, res) => {
   res.sendFile(corePath);
 });
 
-const VERSION_PATH = path.join(__dirname, "data", "version.json");
+const VERSION_PATH = path.join(__dirname, "version.json");
+
 
 app.get("/api/user/core/meta", (req, res) => {
   try {
