@@ -8,11 +8,9 @@
     },
     {
       "key": "KEY-EA43X9IU",
-      "used": true,
+      "used": false,
       "revoked": false,
-      "createdAt": "2025-10-27T00:14:23.149Z",
-      "usedAt": "2025-10-28T00:07:01.298Z",
-      "boundProof": "f12c965b1f04e7b5f189cd4349b15525db3da9805423836ade34cc95248a84a0"
+      "createdAt": "2025-10-27T00:14:23.149Z"
     },
     {
       "key": "KEY-FNQURHPJ",
