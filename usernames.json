@@ -15,7 +15,7 @@
     "did:privy:cmh2iwir601t0l80dqzmz8cmo": {
       "realName": "Quanutum",
       "usernames": {
-        "VaIentino": 97
+        "VaIentino": 101
       }
     },
     "did:privy:cmhb3acaz0009ib0cs9xa7kzm": {
@@ -30,7 +30,7 @@
         "AntHas110Dolla": 93,
         "AntHas114Dolla": 23,
         "AntHas122Dolla": 27,
-        "AntHas130Dolla": 78
+        "AntHas130Dolla": 90
       }
     },
     "did:privy:cmhb3tqh700p1la0btwg54ufe": {
@@ -60,14 +60,14 @@
     "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
       "realName": null,
       "usernames": {
-        "AC3": 128
+        "AC3": 134
       }
     },
     "did:privy:cmd8yiocv02f1lc0losnu3k2z": {
       "realName": null,
       "usernames": {
         "cotton": 39,
-        "spoon": 30
+        "spoon": 43
       }
     },
     "did:privy:cmhb30zrx07yjl50c2tj57jre": {
@@ -103,7 +103,7 @@
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 139
+        "WildFire": 152
       }
     },
     "did:privy:cmh9rwtqe001vl80cspfr7llc": {
@@ -159,7 +159,7 @@
       "usernames": {
         "GAgafrafa": 2,
         "BENaafa": 25,
-        "Dadad": 71
+        "Dadad": 85
       }
     },
     "did:privy:cmh8dyw5606voic0caxmfx9hc": {
@@ -183,7 +183,7 @@
     "did:privy:cmb1ebnlq00vrla0mfa7ktzuz": {
       "realName": null,
       "usernames": {
-        "damnbruh": 113
+        "damnbruh": 130
       }
     },
     "did:privy:cmhb5r04s0033jm0djiaye9c0": {
@@ -219,7 +219,7 @@
     "did:privy:cmfixrob70018l80b4spv82xt": {
       "realName": null,
       "usernames": {
-        "Nefarious": 94
+        "Nefarious": 105
       }
     },
     "did:privy:cmhb65bpf0010l70dauto3e0c": {
@@ -238,7 +238,7 @@
       "realName": null,
       "usernames": {
         "darkl3": 11,
-        "Crom": 1
+        "Crom": 17
       }
     },
     "did:privy:cmhb6rqxl004pl20d96d624jo": {
@@ -280,7 +280,7 @@
     "did:privy:cmeqaxcrh00umk80bi73rc1w7": {
       "realName": null,
       "usernames": {
-        "o88": 75
+        "o88": 90
       }
     },
     "did:privy:cmhb7ilbt00c0jl0cja5q1zi9": {
@@ -310,13 +310,13 @@
     "did:privy:cmegmmmhp00xnjr0bs8qrfdpw": {
       "realName": null,
       "usernames": {
-        "coffeeforwards": 63
+        "coffeeforwards": 71
       }
     },
     "did:privy:cmhb7bt69009zju0ciqfuoi0a": {
       "realName": null,
       "usernames": {
-        "meow_central": 52
+        "meow_central": 62
       }
     },
     "did:privy:cmhb324cp052ni90dnpa0gub6": {
@@ -328,7 +328,7 @@
     "did:privy:cmepoe8qh004yl80bec7w02q7": {
       "realName": null,
       "usernames": {
-        "Bank": 16
+        "Bank": 28
       }
     },
     "did:privy:cmh9arrrj001bjw0ckwnp5gsn": {
@@ -340,19 +340,31 @@
     "did:privy:cmhb8epd5006sl50d5q2nvte8": {
       "realName": null,
       "usernames": {
-        "Sbeb": 6
+        "Sbeb": 7
       }
     },
     "did:privy:cmhb8gcpw008mkz0bmg6clpu9": {
       "realName": null,
       "usernames": {
-        "cortezz": 9
+        "cortezz": 22
       }
     },
     "did:privy:cmhb656cm00fdl20cw5pd6omv": {
       "realName": null,
       "usernames": {
         "hanshon": 11
+      }
+    },
+    "did:privy:cmfbanzgz00cvjr0bnou2y4b9": {
+      "realName": null,
+      "usernames": {
+        "Bamas": 4
+      }
+    },
+    "did:privy:cmhb8gwio001ljp0cdur09fxg": {
+      "realName": null,
+      "usernames": {
+        "mousse": 11
       }
     }
   }
