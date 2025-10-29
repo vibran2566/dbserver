@@ -327,45 +327,6 @@ function showUserCmds(){
 }
 
 
-<div style="margin-top:12px">
-  <input id="cmdInput" placeholder='set-name did:privy:abc123 MyName' style="width:340px;padding:6px">
-  <button id="cmdBtn">Run</button>
-  <div id="cmdResult" style="margin-top:8px;font-family:monospace;color:#0f0"></div>
-</div>
-
-<script>
-document.getElementById("cmdBtn").onclick = async () => {
-  const cmd = document.getElementById("cmdInput").value.trim();
-  const resEl = document.getElementById("cmdResult");
-
-  if (!cmd.startsWith("set-name")) {
-    resEl.textContent = "❌ Command must start with 'set-name'";
-    return;
-  }
-
-  const parts = cmd.split(" ");
-  if (parts.length < 3) {
-    resEl.textContent = "❌ Usage: set-name did:privy:xxxxx Username";
-    return;
-  }
-
-  const [, did, ...nameParts] = parts;
-  const name = nameParts.join(" ");
-
-  try {
-    const res = await fetch("/admin/set-name", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ did, name })
-    });
-    const data = await res.json();
-    resEl.textContent = data.message || "✅ Updated";
-  } catch (e) {
-    resEl.textContent = "⚠️ Failed: " + e.message;
-  }
-};
-</script>
-
 /* ---------- Router ---------- */
 document.querySelectorAll(".dropdown a").forEach(a=>{
   a.onclick=()=>{
@@ -418,6 +379,22 @@ input.addEventListener("keydown",async e=>{
       r=await fetch(`${API}/api/admin/revoke`,{method:"POST",headers:{"admin-token":ADMIN_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({key:arg})}).then(r=>r.json());
     else if(base==="revoke-user-key")
       r=await fetch(`${API}/api/user/admin/revoke`,{method:"POST",headers:{"admin-token":ADMIN_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({key:arg})}).then(r=>r.json());
+    else if(base==="set-name"){
+  const did = parts[1];
+  const name = parts.slice(2).join(" ");
+  if(!did || !name) {
+    log("Usage: set-name did:privy:xxxxx NewName");
+  } else {
+    r = await fetch(`${API}/admin/set-name`, {
+      method: "POST",
+      headers: {
+        "admin-token": ADMIN_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ did, name })
+    }).then(r => r.json());
+  }
+}
     else {
       log("Unknown command.");
       e.target.value="";
