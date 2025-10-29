@@ -203,8 +203,27 @@ app.post("/api/user/trackJoin", (req, res) => {
   if (!privyId || !name)
     return res.status(400).json({ ok: false, error: "missing_fields" });
 
-  queueUsernameJoin(privyId, name);
-  res.json({ ok: true, queued: true });
+  try {
+    let data = {};
+    if (fs.existsSync(USER_FILE)) {
+      data = JSON.parse(fs.readFileSync(USER_FILE, "utf8") || "{}");
+    } else {
+      data = { players: {} };
+    }
+
+    if (!data.players) data.players = {};
+    if (!data.players[privyId])
+      data.players[privyId] = { realName: null, usernames: {} };
+
+    const u = data.players[privyId];
+    u.usernames[name] = (u.usernames[name] || 0) + 1;
+
+    fs.writeFileSync(USER_FILE, JSON.stringify(data, null, 2));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("trackJoin:", err);
+    res.status(500).json({ ok: false, error: "write_failed" });
+  }
 });
 
 
@@ -442,18 +461,30 @@ app.get("/api/user/mapping", async (req,res)=>{
 });
 
 
-app.post("/api/user/batchTrackJoin", async (req, res) => {
+app.post("/api/user/batchTrackJoin", (req, res) => {
   const { players } = req.body || {};
-  if (!Array.isArray(players)) return res.status(400).json({ ok: false, error: "missing_players" });
+  if (!Array.isArray(players))
+    return res.status(400).json({ ok: false, error: "missing_players" });
 
   try {
-    const { data, sha } = await ghLoad(USERNAMES_FILE_PATH, { players: {} });
+    let data = {};
+    if (fs.existsSync(USER_FILE)) {
+      data = JSON.parse(fs.readFileSync(USER_FILE, "utf8") || "{}");
+    } else {
+      data = { players: {} };
+    }
+
+    if (!data.players) data.players = {};
+
     for (const { privyId, name, count } of players) {
       if (!privyId || !name) continue;
-      if (!data.players[privyId]) data.players[privyId] = { realName: null, usernames: {} };
-      data.players[privyId].usernames[name] = (data.players[privyId].usernames[name] || 0) + count;
+      if (!data.players[privyId])
+        data.players[privyId] = { realName: null, usernames: {} };
+      const u = data.players[privyId];
+      u.usernames[name] = (u.usernames[name] || 0) + (count || 1);
     }
-    await ghSave(USERNAMES_FILE_PATH, data, sha);
+
+    fs.writeFileSync(USER_FILE, JSON.stringify(data, null, 2));
     res.json({ ok: true, added: players.length });
   } catch (err) {
     console.error("batchTrackJoin:", err);
