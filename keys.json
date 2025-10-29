@@ -59,14 +59,6 @@
       "used": false,
       "revoked": true,
       "createdAt": "2025-10-28T23:07:16.605Z"
-    },
-    {
-      "key": "KEY-5OC23ZYT",
-      "used": true,
-      "revoked": true,
-      "createdAt": "2025-10-28T23:07:16.605Z",
-      "usedAt": "2025-10-29T02:30:52.067Z",
-      "boundProof": "470ab83a27373bc3ed1259c368ac97b713e32d9204cfab492d784e1a10a97ebf"
     }
   ]
 }
