@@ -200,6 +200,22 @@ main {
   width:260px;
   z-index:101;
 }
+.refresh-btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background .25s ease, transform .1s ease;
+}
+.refresh-btn:hover {
+  background: #6ee7b7;
+  transform: scale(1.05);
+}
+
 .info:hover #infoTip { display:block; }
 </style>
 </head>
@@ -313,36 +329,58 @@ function cmdsBlock(title, lines){
 }
 
 /* ---------- Pages ---------- */
-async function showSizeKeys(){
+async function showSizeKeys() {
   const d = await fetchJSON(`${API}/api/admin/list-keys`);
   show(`
     <div class="panel">
-      <h3>Size Keys</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin:0;display:flex;align-items:center;gap:10px;">
+          Size Keys
+          <button class="refresh-btn" onclick="showSizeKeys()">Refresh</button>
+        </h3>
+      </div>
       ${d.keys.map(k => keyCard(k, "size")).join("")}
     </div>
   `);
 }
-async function showUserKeys(){
+
+async function showUserKeys() {
   const d = await fetchJSON(`${API}/api/user/admin/list-keys`);
   show(`
     <div class="panel">
-      <h3>Username Keys</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin:0;display:flex;align-items:center;gap:10px;">
+          Username Keys
+          <button class="refresh-btn" onclick="showUserKeys()">Refresh</button>
+        </h3>
+      </div>
       ${d.keys.map(k => keyCard(k, "user")).join("")}
     </div>
   `);
 }
-async function showUserList(){
-  const d=await fetchJSON(`${API}/api/user/mapping`);
-  let html=`<div class="panel"><h3>Saved Usernames</h3>`;
-  for(const [id,p] of Object.entries(d.players||{})){
-    html+=`<div class="keycard">
-      <b>${p.realName||"(unverified)"} — ${id}</b><br>
-      <i>Top 3:</i> ${p.topUsernames.map(t=>`${t.name} (${t.count})`).join(", ")}
-    </div>`;
+
+async function showUserList() {
+  const d = await fetchJSON(`${API}/api/user/mapping`);
+  let html = `
+    <div class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin:0;display:flex;align-items:center;gap:10px;">
+          Saved Usernames
+          <button class="refresh-btn" onclick="showUserList()">Refresh</button>
+        </h3>
+      </div>
+  `;
+  for (const [id, p] of Object.entries(d.players || {})) {
+    html += `
+      <div class="keycard">
+        <b>${p.realName || "(unverified)"} — ${id}</b><br>
+        <i>Top 3:</i> ${p.topUsernames.map(t => `${t.name} (${t.count})`).join(", ")}
+      </div>`;
   }
-  html+=`</div>`;
+  html += `</div>`;
   show(html);
 }
+
 function showSizeCmds(){
   show(cmdsBlock("Size Commands",[
     "list-size-keys",
