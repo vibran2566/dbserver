@@ -464,37 +464,38 @@ app.post("/api/validate", async (req, res) => {
 // === Core update endpoints ===
 
 // Serve current version
-let ACTIVE_VERSION = 1; // starting version
+let ACTIVE_VERSION = "1.0.0"; // start version as string
 
 app.get("/api/core/version", (req, res) => {
   res.json({ version: ACTIVE_VERSION });
 });
 
-app.get("/api/core/script", (req, res) => {
-  try {
-    const code = fs.readFileSync("./core.js", "utf8");
-    res.type("application/javascript").send(code);
-  } catch (err) {
-    res.status(500).json({ error: "Core script missing" });
-  }
-});
-
-// POST bump: { version: 2 } (admin only)
 app.post("/api/core/bump", (req, res) => {
   const auth = req.headers.authorization;
   if (auth !== `Bearer ${ADMIN_TOKEN}`) {
-    return res.status(403).json({ error: "Unauthorized" });
+    return res.status(403).json({ error: "unauthorized" });
   }
 
   const { version } = req.body;
-  if (typeof version !== "number" || version <= ACTIVE_VERSION) {
-    return res.status(400).json({ error: "Invalid version number" });
+  if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) {
+    return res.status(400).json({ error: "invalid version format (use x.y.z)" });
+  }
+
+  // compare semver numerically
+  const toNum = v => v.split(".").map(Number);
+  const [a1, a2, a3] = toNum(ACTIVE_VERSION);
+  const [b1, b2, b3] = toNum(version);
+  const isNewer = b1 > a1 || (b1 === a1 && (b2 > a2 || (b2 === a2 && b3 > a3)));
+
+  if (!isNewer) {
+    return res.status(400).json({ error: "version must be higher than current" });
   }
 
   ACTIVE_VERSION = version;
-  console.log(`✅ Core version bumped to ${ACTIVE_VERSION}`);
+  console.log(`✅ Core bumped to version ${ACTIVE_VERSION}`);
   res.json({ ok: true, version: ACTIVE_VERSION });
 });
+
 
 
 app.post("/api/register", async (req, res) => {
