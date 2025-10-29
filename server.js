@@ -390,7 +390,7 @@ app.post("/api/admin/revoke", async (req, res) => {
 
 app.post("/api/validate", (req, res) => {
   const { key, proof } = req.body || {};
-  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
 
   const FILE = "/data/keys.json";
 
@@ -400,26 +400,35 @@ app.post("/api/validate", (req, res) => {
       : { keys: [] };
 
     const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
-    if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
+    if (!found)
+      return res.status(404).json({ ok: false, error: "not_found" });
+    if (found.revoked)
+      return res.status(403).json({ ok: false, error: "revoked" });
 
-    // 🔹 record validation time
+    // ✅ Update last validated time (non-destructive)
     found.lastValidatedAt = new Date().toISOString();
+
+    // 👉 Only save after we've determined a valid or usable key
+    let response;
+
+    if (!found.used) {
+      response = { ok: true, usable: true, used: false };
+    } else if (found.boundProof && proof && proof === found.boundProof) {
+      response = { ok: true, valid: true, bound: true, used: true };
+    } else {
+      response = { ok: false, used: true, error: "bound_mismatch" };
+      res.status(409);
+    }
+
+    // Write updated timestamp and response to disk
     fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
 
-    if (!found.used)
-      return res.status(200).json({ ok:true, usable:true, used:false });
-
-    if (found.boundProof && proof && proof === found.boundProof)
-      return res.status(200).json({ ok:true, valid:true, bound:true, used:true });
-
-    return res.status(409).json({ ok:false, used:true, error:"bound_mismatch" });
+    res.json(response);
   } catch (err) {
     console.error("validate:", err);
-    res.status(500).json({ ok:false, error:"read_failed" });
+    res.status(500).json({ ok: false, error: "server_error" });
   }
 });
-
 app.post("/api/register", async (req, res) => {
   const { key, proof } = req.body || {};
   if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
@@ -575,7 +584,7 @@ app.post("/api/user/admin/revoke", async (req,res)=>{
 
 app.post("/api/user/validate", (req, res) => {
   const { key, proof } = req.body || {};
-  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
 
   const FILE = "/data/userkeys.json";
 
@@ -585,22 +594,33 @@ app.post("/api/user/validate", (req, res) => {
       : { keys: [] };
 
     const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
-    if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
+    if (!found)
+      return res.status(404).json({ ok: false, error: "not_found" });
+    if (found.revoked)
+      return res.status(403).json({ ok: false, error: "revoked" });
 
+    // ✅ Update last validated time (non-destructive)
     found.lastValidatedAt = new Date().toISOString();
+
+    // 👉 Only save after we've determined a valid or usable key
+    let response;
+
+    if (!found.used) {
+      response = { ok: true, usable: true, used: false };
+    } else if (found.boundProof && proof && proof === found.boundProof) {
+      response = { ok: true, valid: true, bound: true, used: true };
+    } else {
+      response = { ok: false, used: true, error: "bound_mismatch" };
+      res.status(409);
+    }
+
+    // Write updated timestamp and response to disk
     fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
 
-    if (!found.used)
-      return res.status(200).json({ ok:true, usable:true, used:false });
-
-    if (found.boundProof && proof && proof === found.boundProof)
-      return res.status(200).json({ ok:true, valid:true, bound:true, used:true });
-
-    return res.status(409).json({ ok:false, used:true, error:"bound_mismatch" });
+    res.json(response);
   } catch (err) {
-    console.error("user-validate:", err);
-    res.status(500).json({ ok:false, error:"read_failed" });
+    console.error("validate:", err);
+    res.status(500).json({ ok: false, error: "server_error" });
   }
 });
 
