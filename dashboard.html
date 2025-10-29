@@ -530,6 +530,28 @@ else if (base === "alert") {
   }
 }
 
+// --- update-core (versionNumber) ---
+else if (base === "update-core") {
+  const version = parseInt(parts[1]);
+  if (isNaN(version)) {
+    log("Usage: update-core (version number)");
+  } else {
+    const res = await fetch(`${API}/api/core/bump`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${ADMIN_TOKEN}`
+      },
+      body: JSON.stringify({ version })
+    }).then(r => r.json());
+
+    if (res.ok) {
+      log(`✅ Core updated to version ${res.version}`);
+    } else {
+      log(`❌ Failed: ${res.error || "unknown error"}`);
+    }
+  }
+}
 
 
     else {
