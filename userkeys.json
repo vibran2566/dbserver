@@ -1,14 +1,6 @@
 {
   "keys": [
     {
-      "key": "KEY-ZEYUXFCQ",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-28T22:06:48.444Z",
-      "usedAt": "2025-10-28T22:12:59.808Z",
-      "boundProof": "88a9f8d680d5f3b71cb0a71e7a33cdfb85004befabe2ee13df21033481079be6"
-    },
-    {
       "key": "KEY-QSYP5AAX",
       "used": true,
       "revoked": false,
