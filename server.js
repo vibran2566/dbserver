@@ -36,7 +36,6 @@ const DATA_DIR = "/data"; // persistent path on Render
 const MAPPING_FILE = path.join(DATA_DIR, "mapping.json");
 
 let mapping = { players: {} };
-
 function timeAgo(isoDate) {
   const diff = Date.now() - new Date(isoDate).getTime();
   const mins = Math.floor(diff / 60000);
@@ -103,7 +102,6 @@ setInterval(() => {
   }
 }, 60000);
 
-// Example API
 app.get("/api/user/mapping", async (req, res) => {
   try {
     let data = {};
@@ -462,6 +460,40 @@ app.post("/api/validate", async (req, res) => {
     console.error("validate:", err);
     res.status(500).json({ ok: false, error: "read_failed" });
   }
+});
+// === Core update endpoints ===
+
+// Serve current version
+let ACTIVE_VERSION = 1; // starting version
+
+app.get("/api/core/version", (req, res) => {
+  res.json({ version: ACTIVE_VERSION });
+});
+
+app.get("/api/core/script", (req, res) => {
+  try {
+    const code = fs.readFileSync("./core.js", "utf8");
+    res.type("application/javascript").send(code);
+  } catch (err) {
+    res.status(500).json({ error: "Core script missing" });
+  }
+});
+
+// POST bump: { version: 2 } (admin only)
+app.post("/api/core/bump", (req, res) => {
+  const auth = req.headers.authorization;
+  if (auth !== `Bearer ${ADMIN_TOKEN}`) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  const { version } = req.body;
+  if (typeof version !== "number" || version <= ACTIVE_VERSION) {
+    return res.status(400).json({ error: "Invalid version number" });
+  }
+
+  ACTIVE_VERSION = version;
+  console.log(`✅ Core version bumped to ${ACTIVE_VERSION}`);
+  res.json({ ok: true, version: ACTIVE_VERSION });
 });
 
 
