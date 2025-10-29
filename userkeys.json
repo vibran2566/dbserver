@@ -12,12 +12,10 @@
     },
     {
       "key": "KEY-D7CDUFG0",
-      "used": true,
+      "used": false,
       "revoked": false,
       "createdAt": "2025-10-29T13:18:45.573Z",
-      "note": "Kitmeef",
-      "usedAt": "2025-10-29T21:11:25.954Z",
-      "boundProof": "b262174a2485c44c66d04e69a2315521ae5089611bdc2346918b118f6943df7d"
+      "note": "Kitmeef"
     },
     {
       "key": "KEY-7BJ09GB9",
