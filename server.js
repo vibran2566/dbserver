@@ -303,6 +303,45 @@ app.post("/api/admin/delete-key", async (req, res) => {
     res.status(500).json({ ok:false, error:"write_failed" });
   }
 });
+// 🔔 Admin-only broadcast alert
+app.post("/api/admin/alert", async (req, res) => {
+  const { target, key, message } = req.body || {};
+
+  // ✅ Require admin token
+  const adminToken = req.headers["admin-token"];
+  if (adminToken !== ADMIN_TOKEN)
+    return res.status(403).json({ ok: false, error: "unauthorized" });
+
+  if (!message)
+    return res.status(400).json({ ok: false, error: "missing_message" });
+
+  const FILE = "/data/alerts.json";
+  const alertObj = {
+    id: Date.now(),
+    target, // "all" or "key"
+    key,
+    message,
+    createdAt: new Date().toISOString(),
+  };
+
+  let alerts = [];
+  try {
+    if (fs.existsSync(FILE)) alerts = JSON.parse(fs.readFileSync(FILE, "utf8"));
+  } catch (err) {
+    console.error("Failed to load alerts.json:", err);
+  }
+
+  alerts.push(alertObj);
+
+  try {
+    fs.writeFileSync(FILE, JSON.stringify(alerts, null, 2));
+    res.json({ ok: true, alert: alertObj });
+  } catch (err) {
+    console.error("Failed to save alert:", err);
+    res.status(500).json({ ok: false, error: "save_failed" });
+  }
+});
+
 app.post("/api/admin/unuse-key", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
     return res.status(401).json({ ok:false, error:"unauthorized" });
