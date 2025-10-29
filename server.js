@@ -406,6 +406,15 @@ app.post("/api/validate", async (req, res) => {
       return res.status(200).json({ ok: true, usable: true, used: false });
 
     if (found.boundProof && proof && proof === found.boundProof)
+      // ✅ Update lastUsedAt timestamp when a key validates successfully
+try {
+  found.lastUsedAt = new Date().toISOString();
+  await ghSave(GITHUB_FILE_PATH, data); // same save method you're already using
+} catch (err) {
+  console.error("Failed to update lastUsedAt:", err);
+}
+
+
       return res.status(200).json({ ok: true, valid: true, bound: true, used: true });
 
     return res.status(409).json({ ok: false, used: true, error: "bound_mismatch" });
