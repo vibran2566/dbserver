@@ -37,6 +37,19 @@ const MAPPING_FILE = path.join(DATA_DIR, "mapping.json");
 
 let mapping = { players: {} };
 
+function timeAgo(isoDate) {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min${mins !== 1 ? "s" : ""} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs !== 1 ? "s" : ""} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days !== 1 ? "s" : ""} ago`;
+}
+
+
+
 // Load mapping on startup
 try {
   if (fs.existsSync(MAPPING_FILE)) {
@@ -375,17 +388,31 @@ app.post("/api/admin/revoke", async (req, res) => {
   }
 });
 
-app.post("/api/validate", async (req, res) => {
+app.post("/api/validate", (req, res) => {
   const { key, proof } = req.body || {};
   if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  const FILE = "/data/keys.json";
+
   try {
-    const { data } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const data = fs.existsSync(FILE)
+      ? JSON.parse(fs.readFileSync(FILE, "utf8"))
+      : { keys: [] };
+
     const found = data.keys.find(k => k.key === key);
     if (!found) return res.status(404).json({ ok:false, error:"not_found" });
     if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
-    if (!found.used) return res.status(200).json({ ok:true, usable:true, used:false });
+
+    // 🔹 record validation time
+    found.lastValidatedAt = new Date().toISOString();
+    fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
+
+    if (!found.used)
+      return res.status(200).json({ ok:true, usable:true, used:false });
+
     if (found.boundProof && proof && proof === found.boundProof)
       return res.status(200).json({ ok:true, valid:true, bound:true, used:true });
+
     return res.status(409).json({ ok:false, used:true, error:"bound_mismatch" });
   } catch (err) {
     console.error("validate:", err);
@@ -546,20 +573,37 @@ app.post("/api/user/admin/revoke", async (req,res)=>{
   }catch(err){console.error("user-revoke:",err);res.status(500).json({ok:false,error:"write_failed"});}
 });
 
-app.post("/api/user/validate", async (req,res)=>{
-  const {key,proof}=req.body||{};
-  if(!key)return res.status(400).json({ok:false,error:"missing_key"});
-  try{
-    const {data}=await ghLoad(USERKEYS_FILE_PATH,{keys:[]});
-    const f=data.keys.find(k=>k.key===key);
-    if(!f)return res.status(404).json({ok:false,error:"not_found"});
-    if(f.revoked)return res.status(403).json({ok:false,error:"revoked"});
-    if(!f.used)return res.json({ok:true,usable:true,used:false});
-    if(f.boundProof&&proof&&proof===f.boundProof)
-      return res.json({ok:true,valid:true,bound:true,used:true});
-    return res.status(409).json({ok:false,used:true,error:"bound_mismatch"});
-  }catch(err){console.error("user-validate:",err);res.status(500).json({ok:false,error:"read_failed"});}
+app.post("/api/user/validate", (req, res) => {
+  const { key, proof } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  const FILE = "/data/userkeys.json";
+
+  try {
+    const data = fs.existsSync(FILE)
+      ? JSON.parse(fs.readFileSync(FILE, "utf8"))
+      : { keys: [] };
+
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+    if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
+
+    found.lastValidatedAt = new Date().toISOString();
+    fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
+
+    if (!found.used)
+      return res.status(200).json({ ok:true, usable:true, used:false });
+
+    if (found.boundProof && proof && proof === found.boundProof)
+      return res.status(200).json({ ok:true, valid:true, bound:true, used:true });
+
+    return res.status(409).json({ ok:false, used:true, error:"bound_mismatch" });
+  } catch (err) {
+    console.error("user-validate:", err);
+    res.status(500).json({ ok:false, error:"read_failed" });
+  }
 });
+
 
 app.post("/api/user/register", async (req,res)=>{
   const {key,proof}=req.body||{};
