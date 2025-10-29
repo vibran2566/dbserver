@@ -35,12 +35,6 @@
       "used": false,
       "revoked": false,
       "createdAt": "2025-10-28T03:11:36.637Z"
-    },
-    {
-      "key": "KEY-QTF1TC07",
-      "used": false,
-      "revoked": true,
-      "createdAt": "2025-10-28T23:07:16.605Z"
     }
   ]
 }
