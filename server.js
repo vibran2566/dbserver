@@ -585,7 +585,7 @@ app.post("/api/user/validate", async (req, res) => {
     return res.status(400).json({ ok: false, error: "missing_key" });
 
   try {
-    const { data } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
     const found = data.keys.find(k => k.key === key);
 
     if (!found)
@@ -594,10 +594,19 @@ app.post("/api/user/validate", async (req, res) => {
       return res.status(403).json({ ok: false, error: "revoked" });
 
     if (!found.used)
-      return res.json({ ok: true, usable: true, used: false });
+      return res.status(200).json({ ok: true, usable: true, used: false });
 
-    if (found.boundProof && proof && proof === found.boundProof)
-      return res.json({ ok: true, valid: true, bound: true, used: true });
+    if (found.boundProof && proof && proof === found.boundProof) {
+      // ✅ same logic: update lastUsedAt and save
+      try {
+        found.lastUsedAt = new Date().toISOString();
+        await ghSave(USERKEYS_FILE_PATH, data, sha);
+      } catch (err) {
+        console.error("Failed to update lastUsedAt (user):", err);
+      }
+
+      return res.status(200).json({ ok: true, valid: true, bound: true, used: true });
+    }
 
     return res.status(409).json({ ok: false, used: true, error: "bound_mismatch" });
 
@@ -606,7 +615,6 @@ app.post("/api/user/validate", async (req, res) => {
     res.status(500).json({ ok: false, error: "read_failed" });
   }
 });
-
 
 
 app.post("/api/user/register", async (req,res)=>{
