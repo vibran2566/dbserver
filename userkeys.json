@@ -3,7 +3,7 @@
     {
       "key": "KEY-INDKH4HT",
       "used": true,
-      "revoked": false,
+      "revoked": true,
       "createdAt": "2025-10-29T02:22:42.647Z",
       "usedAt": "2025-10-29T02:26:30.751Z",
       "boundProof": "bc9603e08d1a3cb0f5f7e17fdd068f691383f09412af1170ed1dc25e7dbd37d5"
