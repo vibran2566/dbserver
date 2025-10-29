@@ -3,13 +3,13 @@
     "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
       "realName": null,
       "usernames": {
-        "AC3": 132
+        "AC3": 152
       }
     },
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 132
+        "WildFire": 152
       }
     },
     "did:privy:cmb1ebnlq00vrla0mfa7ktzuz": {
@@ -33,7 +33,7 @@
     "did:privy:cmepoe8qh004yl80bec7w02q7": {
       "realName": null,
       "usernames": {
-        "Bank": 132
+        "Bank": 140
       }
     },
     "did:privy:cmdssz72l01htjr0bw3060t3f": {
@@ -45,37 +45,37 @@
     "did:privy:cmfievbyo0021jp0cgojqsp40": {
       "realName": null,
       "usernames": {
-        "SUCKMYDIH": 132
+        "SUCKMYDIH": 152
       }
     },
     "did:privy:cmfixrob70018l80b4spv82xt": {
       "realName": null,
       "usernames": {
-        "Nefarious": 132
+        "Nefarious": 141
       }
     },
     "did:privy:cmegmmmhp00xnjr0bs8qrfdpw": {
       "realName": null,
       "usernames": {
-        "coffeeforwards": 132
+        "coffeeforwards": 133
       }
     },
     "did:privy:cmfed3oze004zl20baqi9i60t": {
       "realName": null,
       "usernames": {
-        "Quillpie": 43
+        "Quillpie": 54
       }
     },
     "did:privy:cmeqaxcrh00umk80bi73rc1w7": {
       "realName": null,
       "usernames": {
-        "o88": 132
+        "o88": 152
       }
     },
     "did:privy:cmfbztsv6001vl40b2mc8ffae": {
       "realName": null,
       "usernames": {
-        "Dadad": 124
+        "Dadad": 138
       }
     },
     "did:privy:cmhb9spe3000fl50chcibqc7q": {
@@ -87,13 +87,20 @@
     "did:privy:cmhb9o8jp00igl20cr3ye2stn": {
       "realName": null,
       "usernames": {
-        "thedoc": 3
+        "thedoc": 23
       }
     },
     "did:privy:cmd59bu2e02ojju0ml7emdndz": {
       "realName": null,
       "usernames": {
         "LUMBR": 1
+      }
+    },
+    "did:privy:cmhb74pv7006jjx0dj7icl99q": {
+      "realName": null,
+      "usernames": {
+        "Anonymous Player": 1,
+        "Leffang": 8
       }
     }
   }
