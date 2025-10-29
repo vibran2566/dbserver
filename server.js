@@ -134,7 +134,7 @@ app.get("/api/user/mapping", async (req, res) => {
 app.get("/api/user/core/download", (req, res) => {
   const { key } = req.query;
   // validate key if needed
-  const corePath = path.join(__dirname, "data", "core.js");
+  const corePath = path.join(__dirname, "core.js"); 
 
   if (!fs.existsSync(corePath))
     return res.status(404).json({ ok: false, error: "core_missing" });
