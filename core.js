@@ -172,7 +172,7 @@
       #username-leaderboard-header::before { content:''; position:absolute; width:10px; height:10px; left:5px; top:17.5px;
         background:#22c55e; border-radius:50%; box-shadow:0 0 6px #22c55e; }
       #username-leaderboard .ub-top-drag{
-        width:220px; max-width:220px; overflow:hidden; position:absolute; top:-1px; left:50%; transform:translateX(-50%);
+        width:44px; position:absolute; top:-1px; left:50%; transform:translateX(-50%);
         height:8px; border-radius:6px; background:rgba(255,255,255,.12); cursor:move; box-shadow:0 0 10px rgba(0,0,0,.8);
       }
       .ub-row{ display:flex; align-items:center; justify-content:space-between; padding:4px 0;
