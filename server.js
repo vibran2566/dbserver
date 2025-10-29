@@ -84,29 +84,36 @@ setInterval(() => {
 }, 60000);
 
 // Example API
-app.get("/api/user/mapping", async (req,res)=>{
-  try{
-    const {data}=await ghLoad(USERNAMES_FILE_PATH,{players:{}});
-    const out={};
-    for(const [id,obj] of Object.entries(data.players||{})){
-      const top=Object.entries(obj.usernames||{})
-        .sort((a,b)=>b[1]-a[1])
-        .slice(0,3)
-        .map(([n,c])=>({name:n,count:c}));
+app.get("/api/user/mapping", async (req, res) => {
+  try {
+    let data = {};
+    if (fs.existsSync(USER_FILE)) {
+      data = JSON.parse(fs.readFileSync(USER_FILE, "utf8"));
+    } else {
+      const { data: ghData } = await ghLoad(USERNAMES_FILE_PATH, { players: {} });
+      data = ghData;
+    }
 
-      // 🟩 return "usernames" instead of "allUsernames"
-      out[id]={
+    const out = {};
+    for (const [id, obj] of Object.entries(data.players || {})) {
+      const top = Object.entries(obj.usernames || {})
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([n, c]) => ({ name: n, count: c }));
+      out[id] = {
         realName: obj.realName || null,
-        usernames: obj.usernames || {},  // <-- add this key back
-        topUsernames: top
+        topUsernames: top,
+        allUsernames: obj.usernames || {},
       };
     }
-    res.json({ok:true,players:out});
-  }catch(err){
-    console.error("mapping:",err);
-    res.status(500).json({ok:false,error:"read_failed"});
+
+    res.json({ ok: true, players: out });
+  } catch (err) {
+    console.error("mapping:", err);
+    res.status(500).json({ ok: false, error: "read_failed" });
   }
 });
+
 
 
 // 🕐 username join queue
