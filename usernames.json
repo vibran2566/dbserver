@@ -3,13 +3,13 @@
     "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
       "realName": null,
       "usernames": {
-        "AC3": 129
+        "AC3": 132
       }
     },
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
       "realName": null,
       "usernames": {
-        "WildFire": 129
+        "WildFire": 132
       }
     },
     "did:privy:cmb1ebnlq00vrla0mfa7ktzuz": {
@@ -27,13 +27,13 @@
     "did:privy:cmhb6skwl0060jm0cra0oauhe": {
       "realName": null,
       "usernames": {
-        "KRBM": 129
+        "KRBM": 131
       }
     },
     "did:privy:cmepoe8qh004yl80bec7w02q7": {
       "realName": null,
       "usernames": {
-        "Bank": 129
+        "Bank": 132
       }
     },
     "did:privy:cmdssz72l01htjr0bw3060t3f": {
@@ -45,31 +45,31 @@
     "did:privy:cmfievbyo0021jp0cgojqsp40": {
       "realName": null,
       "usernames": {
-        "SUCKMYDIH": 129
+        "SUCKMYDIH": 132
       }
     },
     "did:privy:cmfixrob70018l80b4spv82xt": {
       "realName": null,
       "usernames": {
-        "Nefarious": 129
+        "Nefarious": 132
       }
     },
     "did:privy:cmegmmmhp00xnjr0bs8qrfdpw": {
       "realName": null,
       "usernames": {
-        "coffeeforwards": 129
+        "coffeeforwards": 132
       }
     },
     "did:privy:cmfed3oze004zl20baqi9i60t": {
       "realName": null,
       "usernames": {
-        "Quillpie": 40
+        "Quillpie": 43
       }
     },
     "did:privy:cmeqaxcrh00umk80bi73rc1w7": {
       "realName": null,
       "usernames": {
-        "o88": 129
+        "o88": 132
       }
     },
     "did:privy:cmfbztsv6001vl40b2mc8ffae": {
@@ -82,6 +82,18 @@
       "realName": null,
       "usernames": {
         "Albanktm22": 11
+      }
+    },
+    "did:privy:cmhb9o8jp00igl20cr3ye2stn": {
+      "realName": null,
+      "usernames": {
+        "thedoc": 3
+      }
+    },
+    "did:privy:cmd59bu2e02ojju0ml7emdndz": {
+      "realName": null,
+      "usernames": {
+        "LUMBR": 1
       }
     }
   }
