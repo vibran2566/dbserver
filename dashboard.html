@@ -298,7 +298,8 @@ function keyCard(k, type="size"){
     Used: ${k.used} | Revoked: ${k.revoked}<br>
     Created: ${new Date(k.createdAt).toLocaleString()}<br>
     ${k.usedAt ? `Used: ${new Date(k.usedAt).toLocaleString()}` : ""}
-    ${k.lastValidatedAt ? `<br><i>Last validated:</i> ${timeAgo(k.lastValidatedAt)}` : ""}
+    ${k.lastUsedAt ? `<br><i>Last used:</i> ${timeAgo(k.lastUsedAt)}` : ""}
+
     ${k.note ? `<br><i>Note:</i> ${k.note}` : ""}
   </div>`;
 }
