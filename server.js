@@ -675,6 +675,19 @@ app.post("/api/user/register", async (req,res)=>{
     res.json({ok:true,used:true,bound:true});
   }catch(err){console.error("user-register:",err);res.status(500).json({ok:false,error:"write_failed"});}
 });
+app.get("/api/user/alerts", async (req, res) => {
+  const key = req.query.key;
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  try {
+    const alerts = JSON.parse(fs.readFileSync("/data/alerts.json", "utf8"));
+    const visible = alerts.filter(a => a.target === "all" || (a.target === "key" && a.key === key));
+    res.json({ ok:true, alerts: visible });
+  } catch (e) {
+    console.error("alerts:", e);
+    res.status(500).json({ ok:false, alerts: [] });
+  }
+});
 
 // ---------- username tracking ----------
 app.post("/api/user/trackJoin", async (req,res)=>{
