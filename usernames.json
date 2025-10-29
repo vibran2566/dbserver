@@ -1,416 +1,81 @@
 {
   "players": {
-    "did:privy:cmhb38i5r04jxjr0cg2hu9uje": {
-      "realName": null,
-      "usernames": {
-        "heillo": 50
-      }
-    },
-    "did:privy:cmhayh4t103ojl20c5uf403ns": {
-      "realName": null,
-      "usernames": {
-        "mimonks": 73
-      }
-    },
-    "did:privy:cmh2iwir601t0l80dqzmz8cmo": {
-      "realName": "Quanutum",
-      "usernames": {
-        "VaIentino": 158
-      }
-    },
-    "did:privy:cmhb3acaz0009ib0cs9xa7kzm": {
-      "realName": null,
-      "usernames": {
-        "Ggguuuhvvn": 26
-      }
-    },
-    "did:privy:cmdssz72l01htjr0bw3060t3f": {
-      "realName": "Ant",
-      "usernames": {
-        "AntHas110Dolla": 93,
-        "AntHas114Dolla": 23,
-        "AntHas122Dolla": 27,
-        "AntHas130Dolla": 148,
-        "wefbiuwuevfubow": 50,
-        "AntHas136Dolla": 201
-      }
-    },
-    "did:privy:cmhb3tqh700p1la0btwg54ufe": {
-      "realName": null,
-      "usernames": {
-        "ghostsku": 7
-      }
-    },
-    "did:privy:cmh99ia0s000ll10c9l8za010": {
-      "realName": null,
-      "usernames": {
-        "didy": 77
-      }
-    },
-    "did:privy:cme22dtex0017jr0b1runl9ec": {
-      "realName": "MrPeanut",
-      "usernames": {
-        "MrPeanut": 196
-      }
-    },
-    "did:privy:cmdmev65t00lolj0jlmyndhh6": {
-      "realName": "Culub",
-      "usernames": {
-        "Culub": 43
-      }
-    },
     "did:privy:cmg0j33e101d2jy0cdgpzuhs8": {
       "realName": null,
       "usernames": {
-        "AC3": 494
-      }
-    },
-    "did:privy:cmd8yiocv02f1lc0losnu3k2z": {
-      "realName": null,
-      "usernames": {
-        "cotton": 39,
-        "spoon": 134
-      }
-    },
-    "did:privy:cmhb30zrx07yjl50c2tj57jre": {
-      "realName": null,
-      "usernames": {
-        "Ytytyt": 7
-      }
-    },
-    "did:privy:cmh9bfoed00mhl40chxvrwj1c": {
-      "realName": null,
-      "usernames": {
-        "Dave6788888": 32
-      }
-    },
-    "did:privy:cmhb4f1ja00brl50c72rawil7": {
-      "realName": null,
-      "usernames": {
-        "Shaq": 21
-      }
-    },
-    "did:privy:cmh9v3awz029qjm0d3kh73p7c": {
-      "realName": null,
-      "usernames": {
-        "broti005": 2
-      }
-    },
-    "did:privy:cmh9lwf7n00mjl40c0qezcpe6": {
-      "realName": null,
-      "usernames": {
-        "Sullyy": 10
+        "AC3": 20
       }
     },
     "did:privy:cmduvon8u004ojv0cvc0ubhwu": {
-      "realName": :"Wildfire",
-      "usernames": {
-        "WildFire": 507
-      }
-    },
-    "did:privy:cmh9rwtqe001vl80cspfr7llc": {
       "realName": null,
       "usernames": {
-        "Von_who": 6
-      }
-    },
-    "did:privy:cmhb4ptsp00h2jy0cui1lkgm3": {
-      "realName": null,
-      "usernames": {
-        "Ronelym26": 8
-      }
-    },
-    "did:privy:cmhb26siq01hoju0d0brd70mh": {
-      "realName": null,
-      "usernames": {
-        "Boutawin": 4
-      }
-    },
-    "did:privy:cmh6johlq00jxji0cir74vvz3": {
-      "realName": null,
-      "usernames": {
-        "J_S": 6
-      }
-    },
-    "did:privy:cmhb5jciz00afl20c0rx3w53q": {
-      "realName": null,
-      "usernames": {
-        "hoking": 4
-      }
-    },
-    "did:privy:cmd8iqhf3001fjv0ml17zbwzl": {
-      "realName": null,
-      "usernames": {
-        "CR1MSON": 7
-      }
-    },
-    "did:privy:cmfvurqny0019k10c4y6a0o9j": {
-      "realName": null,
-      "usernames": {
-        "FruityBallers": 67,
-        "Jerald": 74
-      }
-    },
-    "did:privy:cmhb5rdr600bsl80cvy8k1799": {
-      "realName": null,
-      "usernames": {
-        "Cords0959013": 46
-      }
-    },
-    "did:privy:cmfbztsv6001vl40b2mc8ffae": {
-      "realName": null,
-      "usernames": {
-        "GAgafrafa": 2,
-        "BENaafa": 25,
-        "Dadad": 441
-      }
-    },
-    "did:privy:cmh8dyw5606voic0caxmfx9hc": {
-      "realName": null,
-      "usernames": {
-        "clazs": 4
-      }
-    },
-    "did:privy:cmhazijsl0049l50cgnu0hoeg": {
-      "realName": null,
-      "usernames": {
-        "casua1": 7
-      }
-    },
-    "did:privy:cmdn6el8x015rl10ji5iec8yl": {
-      "realName": null,
-      "usernames": {
-        "Dzeko": 1
+        "WildFire": 20
       }
     },
     "did:privy:cmb1ebnlq00vrla0mfa7ktzuz": {
-      "realName": "Dcione",
-      "usernames": {
-        "damnbruh": 487
-      }
-    },
-    "did:privy:cmhb5r04s0033jm0djiaye9c0": {
       "realName": null,
       "usernames": {
-        "jflush": 4
-      }
-    },
-    "did:privy:cmhb62b8z00g8l70c0apraltb": {
-      "realName": null,
-      "usernames": {
-        "Eggy777": 6
-      }
-    },
-    "did:privy:cmhb6db1t00kkky0e14gbx0c3": {
-      "realName": null,
-      "usernames": {
-        "krovostok77": 3
-      }
-    },
-    "did:privy:cmhb64ree00j7jj0c6pe1qidc": {
-      "realName": null,
-      "usernames": {
-        "Bruhhhh111": 6
-      }
-    },
-    "did:privy:cmhb6jy2x002il70etfi086ty": {
-      "realName": null,
-      "usernames": {
-        "rederator": 1
-      }
-    },
-    "did:privy:cmfixrob70018l80b4spv82xt": {
-      "realName": "Mr-1221",
-      "usernames": {
-        "Nefarious": 465
-      }
-    },
-    "did:privy:cmhb65bpf0010l70dauto3e0c": {
-      "realName": null,
-      "usernames": {
-        "doktorigre": 1
-      }
-    },
-    "did:privy:cmd1jfpbf01qjl50nsudobofb": {
-      "realName": "Denis237",
-      "usernames": {
-        "Denis237": 9
-      }
-    },
-    "did:privy:cmdub87d0013ql40c310ignbo": {
-      "realName": "Crom",
-      "usernames": {
-        "darkl3": 11,
-        "Crom": 90
-      }
-    },
-    "did:privy:cmhb6rqxl004pl20d96d624jo": {
-      "realName": null,
-      "usernames": {
-        "BRUTALBLUE": 2
-      }
-    },
-    "did:privy:cmhar6pz803lkjo0cfvbxgfb3": {
-      "realName": null,
-      "usernames": {
-        "ounad": 7
-      }
-    },
-    "did:privy:cmf2yssxf0023jp0b2qjkguq4": {
-      "realName": null,
-      "usernames": {
-        "Snskeks": 7
-      }
-    },
-    "did:privy:cmhb77vn700ijjs0c3nqsqkh1": {
-      "realName": null,
-      "usernames": {
-        "WahAht": 1
-      }
-    },
-    "did:privy:cmfed3oze004zl20baqi9i60t": {
-      "realName": "Quillpie",
-      "usernames": {
-        "Quillpie": 387
-      }
-    },
-    "did:privy:cmhb6xlyw002nl20cnl32azdw": {
-      "realName": null,
-      "usernames": {
-        "Jarge": 11
-      }
-    },
-    "did:privy:cmeqaxcrh00umk80bi73rc1w7": {
-      "realName": null,
-      "usernames": {
-        "o88": 447
-      }
-    },
-    "did:privy:cmhb7ilbt00c0jl0cja5q1zi9": {
-      "realName": null,
-      "usernames": {
-        "soultaker": 10
-      }
-    },
-    "did:privy:cmhb6wwcq000vl50ccrd7edhb": {
-      "realName": null,
-      "usernames": {
-        "levidaboi33": 1
-      }
-    },
-    "did:privy:cmfskoyn700vil10cjbgtzhrg": {
-      "realName": null,
-      "usernames": {
-        "tmg": 2
-      }
-    },
-    "did:privy:cmhb7pykl00n4jo0do3148dr8": {
-      "realName": null,
-      "usernames": {
-        "ThankYou05": 22
-      }
-    },
-    "did:privy:cmegmmmhp00xnjr0bs8qrfdpw": {
-      "realName": "Darkle",
-      "usernames": {
-        "coffeeforwards": 428
-      }
-    },
-    "did:privy:cmhb7bt69009zju0ciqfuoi0a": {
-      "realName": null,
-      "usernames": {
-        "meow_central": 73
-      }
-    },
-    "did:privy:cmhb324cp052ni90dnpa0gub6": {
-      "realName": null,
-      "usernames": {
-        "TripleT": 3
-      }
-    },
-    "did:privy:cmepoe8qh004yl80bec7w02q7": {
-      "realName": "Erten",
-      "usernames": {
-        "Bank": 384
-      }
-    },
-    "did:privy:cmh9arrrj001bjw0ckwnp5gsn": {
-      "realName": null,
-      "usernames": {
-        "Misha6791": 26
-      }
-    },
-    "did:privy:cmhb8epd5006sl50d5q2nvte8": {
-      "realName": null,
-      "usernames": {
-        "Sbeb": 7
-      }
-    },
-    "did:privy:cmhb8gcpw008mkz0bmg6clpu9": {
-      "realName": null,
-      "usernames": {
-        "cortezz": 27
-      }
-    },
-    "did:privy:cmhb656cm00fdl20cw5pd6omv": {
-      "realName": null,
-      "usernames": {
-        "hanshon": 11
-      }
-    },
-    "did:privy:cmfbanzgz00cvjr0bnou2y4b9": {
-      "realName": null,
-      "usernames": {
-        "Bamas": 4
-      }
-    },
-    "did:privy:cmhb8gwio001ljp0cdur09fxg": {
-      "realName": null,
-      "usernames": {
-        "mousse": 26
-      }
-    },
-    "did:privy:cmcx180pj003xl80n88u4iwrn": {
-      "realName": null,
-      "usernames": {
-        "200ping": 49
-      }
-    },
-    "did:privy:cmfievbyo0021jp0cgojqsp40": {
-      "realName": "damnbruh.com",
-      "usernames": {
-        "SUCKMYDIH": 287
-      }
-    },
-    "did:privy:cmh5dmeq500miky0d0u6pa96u": {
-      "realName": null,
-      "usernames": {
-        "Trishildis": 114
-      }
-    },
-    "did:privy:cmeb9prf300tllc0cfx86sc6l": {
-      "realName": null,
-      "usernames": {
-        "dobosul": 91
-      }
-    },
-    "did:privy:cmhb6skwl0060jm0cra0oauhe": {
-      "realName": null,
-      "usernames": {
-        "KRBM": 105,
-        "Anonymous Player": 3
-      }
-    },
-    "did:privy:cmhb9ezoh00kol40co6olaj19": {
-      "realName": null,
-      "usernames": {
-        "Anes19": 52
+        "damnbruh": 20
       }
     },
     "did:privy:cmh9zz8uu0003l90c80ugla85": {
       "realName": null,
       "usernames": {
-        "Fekino": 90
+        "Fekino": 19
+      }
+    },
+    "did:privy:cmhb6skwl0060jm0cra0oauhe": {
+      "realName": null,
+      "usernames": {
+        "KRBM": 20
+      }
+    },
+    "did:privy:cmepoe8qh004yl80bec7w02q7": {
+      "realName": null,
+      "usernames": {
+        "Bank": 20
+      }
+    },
+    "did:privy:cmdssz72l01htjr0bw3060t3f": {
+      "realName": null,
+      "usernames": {
+        "AntHas136Dolla": 20
+      }
+    },
+    "did:privy:cmfievbyo0021jp0cgojqsp40": {
+      "realName": null,
+      "usernames": {
+        "SUCKMYDIH": 20
+      }
+    },
+    "did:privy:cmfixrob70018l80b4spv82xt": {
+      "realName": null,
+      "usernames": {
+        "Nefarious": 20
+      }
+    },
+    "did:privy:cmegmmmhp00xnjr0bs8qrfdpw": {
+      "realName": null,
+      "usernames": {
+        "coffeeforwards": 20
+      }
+    },
+    "did:privy:cmfed3oze004zl20baqi9i60t": {
+      "realName": null,
+      "usernames": {
+        "Quillpie": 9
+      }
+    },
+    "did:privy:cmeqaxcrh00umk80bi73rc1w7": {
+      "realName": null,
+      "usernames": {
+        "o88": 20
+      }
+    },
+    "did:privy:cmfbztsv6001vl40b2mc8ffae": {
+      "realName": null,
+      "usernames": {
+        "Dadad": 20
       }
     }
   }
