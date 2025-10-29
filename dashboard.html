@@ -379,22 +379,23 @@ input.addEventListener("keydown",async e=>{
       r=await fetch(`${API}/api/admin/revoke`,{method:"POST",headers:{"admin-token":ADMIN_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({key:arg})}).then(r=>r.json());
     else if(base==="revoke-user-key")
       r=await fetch(`${API}/api/user/admin/revoke`,{method:"POST",headers:{"admin-token":ADMIN_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({key:arg})}).then(r=>r.json());
-    else if(base==="set-name"){
+    else if (base === "set-name") {
   const did = parts[1];
-  const name = parts.slice(2).join(" ");
-  if(!did || !name) {
-    log("Usage: set-name did:privy:xxxxx NewName");
+  const newName = parts.slice(2).join(" ");
+  if (!did || !newName) {
+    log("Usage: set-name did:privy:xxxx NewName");
   } else {
-    r = await fetch(`${API}/admin/set-name`, {
+    r = await fetch(`${API}/api/user/admin/set-name`, {
       method: "POST",
       headers: {
         "admin-token": ADMIN_TOKEN,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ did, name })
+      body: JSON.stringify({ did, name: newName })
     }).then(r => r.json());
   }
 }
+
     else {
       log("Unknown command.");
       e.target.value="";
