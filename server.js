@@ -63,14 +63,21 @@ app.post("/api/user/admin/set-name", (req, res) => {
       data = JSON.parse(fs.readFileSync(USER_FILE, "utf8") || "{}");
     }
 
-    if (!data[did]) data[did] = { realName: null, usernames: {} };
-    data[did].realName = name;
+    // ensure top-level structure
+    if (!data.players) data.players = {};
+
+    // ensure player object exists
+    if (!data.players[did])
+      data.players[did] = { realName: null, usernames: {} };
+
+    // update real name
+    data.players[did].realName = name;
 
     fs.writeFileSync(USER_FILE, JSON.stringify(data, null, 2));
-    res.json({ message: `✅ Set ${did} → ${name}` });
+    res.json({ ok: true, message: `✅ Set ${did} → ${name}` });
   } catch (err) {
     console.error("set-name error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ ok: false, message: "Server error" });
   }
 });
 
