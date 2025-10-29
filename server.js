@@ -49,6 +49,31 @@ try {
   console.error("❌ Failed to load mapping:", e);
 }
 
+const USER_FILE = "/data/usernames.json";
+
+app.post("/admin/set-name", (req, res) => {
+  const { did, name } = req.body;
+  if (!did?.startsWith("did:privy:") || !name) {
+    return res.status(400).json({ message: "Invalid DID or name" });
+  }
+
+  try {
+    let data = {};
+    if (fs.existsSync(USER_FILE)) {
+      data = JSON.parse(fs.readFileSync(USER_FILE, "utf8") || "{}");
+    }
+
+    if (!data[did]) data[did] = { realName: null, usernames: {} };
+    data[did].realName = name;
+
+    fs.writeFileSync(USER_FILE, JSON.stringify(data, null, 2));
+    res.json({ message: `✅ Set ${did} → ${name}` });
+  } catch (err) {
+    console.error("set-name error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // Save periodically (every 60s)
 setInterval(() => {
   try {
