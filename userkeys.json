@@ -54,7 +54,8 @@
       "createdAt": "2025-10-29T22:29:07.655Z",
       "note": "bnks",
       "usedAt": "2025-10-29T22:29:55.079Z",
-      "boundProof": "1ccea297da6e1df2ef54baddce191aceb426e42f3df2ce2a56ac0bfa1421aca8"
+      "boundProof": "1ccea297da6e1df2ef54baddce191aceb426e42f3df2ce2a56ac0bfa1421aca8",
+      "lastUsedAt": "2025-10-30T00:03:29.316Z"
     }
   ]
 }
