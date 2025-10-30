@@ -50,7 +50,7 @@
     {
       "key": "KEY-S95DOP16",
       "used": true,
-      "revoked": false,
+      "revoked": true,
       "createdAt": "2025-10-29T22:29:07.655Z",
       "note": "bnks",
       "usedAt": "2025-10-29T22:29:55.079Z",
