@@ -9,11 +9,13 @@
     },
     {
       "key": "KEY-8JD9IVNS",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T13:06:45.933Z",
       "note": "vibran LT",
-      "lastUsedAt": "2025-10-29T19:45:11.898Z"
+      "lastUsedAt": "2025-10-29T19:45:11.898Z",
+      "usedAt": "2025-10-30T14:41:09.270Z",
+      "boundProof": "e0619c745cfd611877f7d819dc866ddf081d155dcad59de5a0a1f8e8e7c17ecd"
     },
     {
       "key": "KEY-XKRT7P8B",
