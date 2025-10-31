@@ -46,6 +46,12 @@
       "lastUsedAt": "2025-10-31T22:22:37.976Z",
       "usedAt": "2025-10-30T20:26:49.691Z",
       "boundProof": "e6fb82bd374cd625297055f652eca5ff1c3e493ffd0dbcc19d8e38f3d4254371"
+    },
+    {
+      "key": "KEY-GAENCS0M",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-10-31T23:34:18.649Z"
     }
   ]
 }
