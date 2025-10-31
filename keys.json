@@ -51,7 +51,8 @@
       "key": "KEY-GAENCS0M",
       "used": false,
       "revoked": false,
-      "createdAt": "2025-10-31T23:34:18.649Z"
+      "createdAt": "2025-10-31T23:34:18.649Z",
+      "note": "Darkle Demo"
     }
   ]
 }
