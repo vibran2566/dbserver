@@ -50,9 +50,11 @@
     },
     {
       "key": "KEY-R02BIBU0",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-11-01T18:53:24.796Z"
+      "createdAt": "2025-11-01T18:53:24.796Z",
+      "usedAt": "2025-11-01T18:55:30.776Z",
+      "boundProof": "bf03aeec3ade87a6038436e8cb96e89d5c926bc06e145c906ec248d590bd84c4"
     }
   ]
 }
