@@ -172,7 +172,16 @@ async function fetchLeaderboardFromBackend() {
       .catch(e=>{ if (to) clearTimeout(to); resolve({ ok:false,status:0,json:null, error:String(e && e.name==='AbortError'?'timeout':'network') }); });
     });
   }
-
+async function fetchMapping() {
+  try {
+    const res = await fetch(`${USER_API_BASE}/mapping`, { cache: 'no-store' });
+    if (!res.ok) return { players: {} };
+    const j = await res.json().catch(() => ({}));
+    return (j && typeof j === 'object' && j.players) ? j : { players: {} };
+  } catch {
+    return { players: {} };
+  }
+}
   // ==============================
   // UI/STYLES (copied)
   // ==============================
@@ -360,7 +369,11 @@ async function fetchLeaderboardFromBackend() {
       <div id="ub-body"></div>
       <div class="ub-footer" id="ub-footer"></div>
     `;
-    onBodyReady(()=>document.body.appendChild(LB_BOX));
+    if (document.body) {
+  document.body.appendChild(LB_BOX);
+} else {
+  window.addEventListener('DOMContentLoaded', () => document.body.appendChild(LB_BOX), { once: true });
+}
     LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
     LB_FOOTER = LB_BOX.querySelector('#ub-footer');
 
