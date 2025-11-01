@@ -56,6 +56,12 @@
       "usedAt": "2025-11-01T18:55:30.776Z",
       "boundProof": "bf03aeec3ade87a6038436e8cb96e89d5c926bc06e145c906ec248d590bd84c4",
       "lastUsedAt": "2025-11-01T22:04:42.836Z"
+    },
+    {
+      "key": "KEY-PPMQS9P2",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-11-01T22:07:20.362Z"
     }
   ]
 }
