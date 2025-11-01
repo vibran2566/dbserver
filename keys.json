@@ -47,16 +47,6 @@
       "usedAt": "2025-10-30T20:26:49.691Z",
       "boundProof": "e6fb82bd374cd625297055f652eca5ff1c3e493ffd0dbcc19d8e38f3d4254371",
       "note": "vibran PC"
-    },
-    {
-      "key": "KEY-GAENCS0M",
-      "used": true,
-      "revoked": true,
-      "createdAt": "2025-10-31T23:34:18.649Z",
-      "note": "Darkle Demo",
-      "usedAt": "2025-10-31T23:39:50.565Z",
-      "boundProof": "1e052d1a3e9c5eca026699a90e8d15d10596832c20597f5740bceb27cfb68ebf",
-      "lastUsedAt": "2025-11-01T10:15:07.199Z"
     }
   ]
 }
