@@ -7,6 +7,28 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 
+// Paths + app config  (MOVE THIS UP)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+
+const app  = express();
+const PORT = process.env.PORT || 3000;
+
+const ADMIN_TOKEN          = process.env.ADMIN_TOKEN || "";
+const GITHUB_TOKEN         = process.env.GITHUB_TOKEN;
+const GITHUB_REPO          = process.env.GITHUB_REPO;
+const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json";
+const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || "userkeys.json";
+const USERNAMES_FILE_PATH  = process.env.USERNAMES_FILE_PATH  || "usernames.json";
+const USER_FILE            = "/data/usernames.json"; // <-- needed by the new poller
+
+app.use(express.static(__dirname));
+app.use(morgan("tiny"));
+app.use(express.json({ limit: "256kb" }));
+app.use(cors());
+// app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
+
+
 // === DamnBruh shard polling & usernames (ADD) ===============================
 // Poll these 6 shards every 5s (server-side only; client never hits /players)
 const DB_SHARDS = ['us-1','us-5','us-20','eu-1','eu-5','eu-20'];
@@ -112,21 +134,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ---------- App config ----------
-const app = express();
-const PORT = process.env.PORT || 3000;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const GITHUB_REPO = process.env.GITHUB_REPO;
-const GITHUB_FILE_PATH = process.env.GITHUB_FILE_PATH || "keys.json";           // size system
-const USERKEYS_FILE_PATH = process.env.USERKEYS_FILE_PATH || "userkeys.json";   // username system keys
-const USERNAMES_FILE_PATH = process.env.USERNAMES_FILE_PATH || "usernames.json";// username data
-app.use(express.static(__dirname));
 
-
-// ---------- Middleware ----------
-app.use(morgan("tiny"));
-app.use(express.json({ limit: "256kb" }));
-app.use(cors());
 // app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
 
 
@@ -160,7 +168,6 @@ try {
   console.error("❌ Failed to load mapping:", e);
 }
 
-const USER_FILE = "/data/usernames.json";
 
 app.post("/api/user/admin/set-name", (req, res) => {
   const { did, name } = req.body;
@@ -882,37 +889,7 @@ app.get("/api/user/mapping", async (req,res)=>{
 });
 
 
-app.post("/api/user/batchTrackJoin", (req, res) => {
-  const { players } = req.body || {};
-  if (!Array.isArray(players))
-    return res.status(400).json({ ok: false, error: "missing_players" });
 
-  try {
-    let data = {};
-    if (fs.existsSync(USER_FILE)) {
-      data = JSON.parse(fs.readFileSync(USER_FILE, "utf8") || "{}");
-    } else {
-      data = { players: {} };
-    }
-
-    if (!data.players) data.players = {};
-
-    for (const { privyId, name, count } of players) {
-      if (!privyId || !name) continue;
-      if (name.trim().toLowerCase() === "anonymous player") continue;
-      if (!data.players[privyId])
-        data.players[privyId] = { realName: null, usernames: {} };
-      const u = data.players[privyId];
-      u.usernames[name] = (u.usernames[name] || 0) + (count || 1);
-    }
-
-    fs.writeFileSync(USER_FILE, JSON.stringify(data, null, 2));
-    res.json({ ok: true, added: players.length });
-  } catch (err) {
-    console.error("batchTrackJoin:", err);
-    res.status(500).json({ ok: false, error: "write_failed" });
-  }
-});
 
 
 /* =======================================================
