@@ -167,7 +167,9 @@ app.get('/healthz', (_req, res) => res.json({ ok: true, ts: now() }));
 function validateServerKey(key) {
   return SHARDS.includes(key);
 }
-
+app.get('/dashboard.html', (req, res) =>
+  res.sendFile(path.join(__dirname, 'dashboard.html'))
+);
 // GET /api/game/leaderboard?serverKey=us-1
 app.get('/api/game/leaderboard', (req, res) => {
   const serverKey = (req.query.serverKey || '').toString();
