@@ -130,8 +130,7 @@ app.get('/api/game/usernames', (req, res) => {
 });
 
 // Paths
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
 
 // ---------- App config ----------
 
