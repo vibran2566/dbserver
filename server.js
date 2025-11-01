@@ -6,7 +6,30 @@ import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+// === Local disk usernames store (disk-only) ================================
+const DATA_DIR = "/data";
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const USER_FILE = path.join(DATA_DIR, "usernames.json");
 
+function loadUserFile(fallback = { players: {} }) {
+  try {
+    if (fs.existsSync(USER_FILE)) {
+      return JSON.parse(fs.readFileSync(USER_FILE, "utf8"));
+    }
+  } catch (e) {
+    console.error("[usernames load]", e?.message || e);
+  }
+  return fallback;
+}
+function saveUserFile(obj) {
+  try {
+    fs.writeFileSync(USER_FILE, JSON.stringify(obj, null, 2));
+    return true;
+  } catch (e) {
+    console.error("[usernames save]", e?.message || e);
+    return false;
+  }
+}
 // Paths + app config  (MOVE THIS UP)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -20,7 +43,7 @@ const GITHUB_REPO          = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json";
 const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || "userkeys.json";
 const USERNAMES_FILE_PATH  = process.env.USERNAMES_FILE_PATH  || "usernames.json";
-const USER_FILE            = "/data/usernames.json"; // <-- needed by the new poller
+- 
 
 app.use(express.static(__dirname));
 app.use(morgan("tiny"));
@@ -46,12 +69,7 @@ function dbRegion(serverKey) { return serverKey.startsWith('us-') ? 'US' : 'EU';
 function nowMs() { return Date.now(); }
 
 // Load usernames file to memory (compatible with your existing schema)
-let dbUsernamesMem = (() => {
-  try {
-    if (fs.existsSync(USER_FILE)) return JSON.parse(fs.readFileSync(USER_FILE, 'utf8'));
-  } catch {}
-  return { players: {} };
-})();
+let dbUsernamesMem = loadUserFile();
 let dbDirty = false;
 
 async function dbPollShard(serverKey) {
@@ -104,12 +122,7 @@ setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
 // Persist usernames every 15s; keep polling/caching between writes
 setInterval(() => {
   if (!dbDirty) return;
-  try {
-    fs.writeFileSync(USER_FILE, JSON.stringify(dbUsernamesMem, null, 2));
-    dbDirty = false;
-  } catch (e) {
-    console.error('[usernames write]', e?.message || e);
-  }
+  if (saveUserFile(dbUsernamesMem)) dbDirty = false;
 }, 15000);
 
 // === Read-only endpoints (client consumes these) ============================
@@ -138,7 +151,7 @@ app.get('/api/game/usernames', (req, res) => {
 
 
 
-const DATA_DIR = "/data"; // persistent path on Render
+
 const MAPPING_FILE = path.join(DATA_DIR, "mapping.json");
 
 let mapping = { players: {} };
@@ -207,16 +220,10 @@ setInterval(() => {
   }
 }, 60000);
 
-app.get("/api/user/mapping", async (req, res) => {
+// Disk-only mapping (single source of truth)
+app.get("/api/user/mapping", (req, res) => {
   try {
-    let data = {};
-    if (fs.existsSync(USER_FILE)) {
-      data = JSON.parse(fs.readFileSync(USER_FILE, "utf8"));
-    } else {
-      const { data: ghData } = await ghLoad(USERNAMES_FILE_PATH, { players: {} });
-      data = ghData;
-    }
-
+    const data = loadUserFile(); // reads /data/usernames.json
     const out = {};
     for (const [id, obj] of Object.entries(data.players || {})) {
       const top = Object.entries(obj.usernames || {})
@@ -227,9 +234,9 @@ app.get("/api/user/mapping", async (req, res) => {
         realName: obj.realName || null,
         topUsernames: top,
         allUsernames: obj.usernames || {},
+        Region: obj.Region || null
       };
     }
-
     res.json({ ok: true, players: out });
   } catch (err) {
     console.error("mapping:", err);
@@ -265,38 +272,8 @@ app.get("/api/user/core/meta", (req, res) => {
 });
 
 // 🕐 username join queue
-const usernameQueue = new Map(); // privyId -> { name, count }
-
-// add to queue instead of writing immediately
-function queueUsernameJoin(privyId, name) {
-  if (!privyId || !name) return;
-  const prev = usernameQueue.get(privyId) || { name, count: 0 };
-  usernameQueue.set(privyId, { name, count: prev.count + 1 });
-}
 
 // flush queued joins to GitHub every 2 min 30 sec
-setInterval(async () => {
-  if (usernameQueue.size === 0) return;
-  console.log(`🕓 Flushing ${usernameQueue.size} queued username joins...`);
-  try {
-    const { data, sha } = await ghLoad(USERNAMES_FILE_PATH, { players: {} });
-    if (!data.players) data.players = {};
-
-    for (const [privyId, info] of usernameQueue.entries()) {
-      const { name, count } = info;
-      if (!data.players[privyId])
-        data.players[privyId] = { realName: null, usernames: {} };
-      const user = data.players[privyId];
-      user.usernames[name] = (user.usernames[name] || 0) + count;
-    }
-
-    await ghSave(USERNAMES_FILE_PATH, data, sha);
-    usernameQueue.clear();
-    console.log("✅ Username queue flushed");
-  } catch (err) {
-    console.error("❌ Username flush failed:", err);
-  }
-}, 200000); // 
 
 
 // ---------- GitHub helpers ----------
@@ -336,38 +313,12 @@ function genKey() {
 }
 
 
-// 🕐 store incoming joins temporarily
-const joinQueue = new Map(); // privyId -> latest {name, count}
 
-function queueJoin(privyId, name) {
-  if (!privyId || !name) return;
-  const prev = joinQueue.get(privyId) || { name, count: 0 };
-  joinQueue.set(privyId, { name, count: prev.count + 1 });
-}
 
 
 
 
 // 🕓 flush queued joins every 2 min 30 sec
-setInterval(async () => {
-  if (joinQueue.size === 0) return;
-  console.log(`Flushing ${joinQueue.size} queued joins…`);
-  try {
-    const { data, sha } = await loadKeys(); // same GitHub JSON load helper
-    for (const [privyId, info] of joinQueue.entries()) {
-      const { name, count } = info;
-      const player = data.players?.[privyId] || { names: {} };
-      player.names[name] = (player.names[name] || 0) + count;
-      data.players[privyId] = player;
-    }
-    await saveKeys(data, sha);
-    joinQueue.clear();
-    console.log("✅ Flushed joins successfully");
-  } catch (err) {
-    console.error("❌ Flush failed:", err);
-  }
-}, 150000); // 2 min 30 sec = 150000 ms
-
 
 
 /* =======================================================
@@ -463,27 +414,6 @@ app.post("/api/admin/unuse-key", async (req, res) => {
     res.json({ ok:true, message:`${key} reset to unused` });
   } catch (err) {
     console.error("unuse-key:", err);
-    res.status(500).json({ ok:false, error:"write_failed" });
-  }
-});
-app.post("/api/admin/add-note", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok:false, error:"unauthorized" });
-
-  const { key, note } = req.body || {};
-  if (!key || typeof note !== "string")
-    return res.status(400).json({ ok:false, error:"missing_fields" });
-
-  try {
-    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
-
-    found.note = note.trim();
-    await ghSave(GITHUB_FILE_PATH, data, sha);
-    res.json({ ok:true, message:`Note added to ${key}` });
-  } catch (err) {
-    console.error("add-note:", err);
     res.status(500).json({ ok:false, error:"write_failed" });
   }
 });
@@ -664,28 +594,7 @@ app.post("/api/admin/add-note", async (req, res) => {
     res.status(500).json({ ok: false, error: "write_failed" });
   }
 });
-app.post("/api/user/admin/add-note", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok: false, error: "unauthorized" });
 
-  const { key, note } = req.body || {};
-  if (!key || typeof note !== "string")
-    return res.status(400).json({ ok: false, error: "missing_fields" });
-
-  try {
-    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
-    if (!found)
-      return res.status(404).json({ ok: false, error: "not_found" });
-
-    found.note = note.trim();
-    await ghSave(USERKEYS_FILE_PATH, data, sha);
-    res.json({ ok: true, message: `Note added to ${key}` });
-  } catch (err) {
-    console.error("user-add-note:", err);
-    res.status(500).json({ ok: false, error: "write_failed" });
-  }
-});
 
 app.post("/api/user/admin/add-keys", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
@@ -762,25 +671,20 @@ app.post("/api/user/admin/add-note", async (req, res) => {
     res.status(500).json({ ok:false, error:"write_failed" });
   }
 });
-app.post("/api/user/admin/delete-player", async (req, res) => {
+app.post("/api/user/admin/delete-player", (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
     return res.status(401).json({ ok:false, error:"unauthorized" });
 
   const { privyId } = req.body || {};
   if (!privyId) return res.status(400).json({ ok:false, error:"missing_privyId" });
 
-  try {
-    const { data, sha } = await ghLoad(USERNAMES_FILE_PATH, { players:{} });
-    if (!data.players[privyId])
-      return res.status(404).json({ ok:false, error:"not_found" });
+  const data = loadUserFile();
+  if (!data.players || !data.players[privyId])
+    return res.status(404).json({ ok:false, error:"not_found" });
 
-    delete data.players[privyId];
-    await ghSave(USERNAMES_FILE_PATH, data, sha);
-    res.json({ ok:true, message:`Deleted ${privyId}` });
-  } catch (err) {
-    console.error("delete-player:", err);
-    res.status(500).json({ ok:false, error:"write_failed" });
-  }
+  delete data.players[privyId];
+  saveUserFile(data);
+  res.json({ ok:true, message:`Deleted ${privyId}` });
 });
 
 app.post("/api/user/admin/revoke", async (req,res)=>{
@@ -872,20 +776,6 @@ app.get("/api/user/alerts", async (req, res) => {
 // ---------- username tracking ----------
 
 
-app.get("/api/user/mapping", async (req,res)=>{
-  try{
-    const {data}=await ghLoad(USERNAMES_FILE_PATH,{players:{}});
-    const out={};
-    for(const [id,obj] of Object.entries(data.players||{})){
-      const top=Object.entries(obj.usernames||{})
-        .sort((a,b)=>b[1]-a[1])
-        .slice(0,3)
-        .map(([n,c])=>({name:n,count:c}));
-      out[id]={realName:obj.realName||null,topUsernames:top,allUsernames:obj.usernames||{}};
-    }
-    res.json({ok:true,players:out});
-  }catch(err){console.error("mapping:",err);res.status(500).json({ok:false,error:"read_failed"});}
-});
 
 
 
