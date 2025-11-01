@@ -7,6 +7,105 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 
+// === DamnBruh shard polling & usernames (ADD) ===============================
+// Poll these 6 shards every 5s (server-side only; client never hits /players)
+const DB_SHARDS = ['us-1','us-5','us-20','eu-1','eu-5','eu-20'];
+
+// Per-shard cache: { updatedAt, players[], top[] }
+const dbShardCache = Object.fromEntries(
+  DB_SHARDS.map(k => [k, { updatedAt: 0, players: [], top: [] }])
+);
+
+function dbToGamePlayersUrl(serverKey) {
+  const [region, num] = serverKey.split('-'); // "us-1" -> ["us","1"]
+  return `https://damnbruh-game-server-instance-${num}-${region}.onrender.com/players`;
+}
+function dbRegion(serverKey) { return serverKey.startsWith('us-') ? 'US' : 'EU'; }
+function nowMs() { return Date.now(); }
+
+// Load usernames file to memory (compatible with your existing schema)
+let dbUsernamesMem = (() => {
+  try {
+    if (fs.existsSync(USER_FILE)) return JSON.parse(fs.readFileSync(USER_FILE, 'utf8'));
+  } catch {}
+  return { players: {} };
+})();
+let dbDirty = false;
+
+async function dbPollShard(serverKey) {
+  try {
+    const rsp = await fetch(dbToGamePlayersUrl(serverKey), { method: 'GET' });
+    if (!rsp.ok) throw new Error(`HTTP ${rsp.status}`);
+    const data = await rsp.json();
+    const players = Array.isArray(data.players) ? data.players : [];
+
+    // Cache: filter to >2, sort desc, rank
+    const top = players
+      .filter(p => typeof p.monetaryValue === 'number' && p.monetaryValue > 2)
+      .sort((a,b) => b.monetaryValue - a.monetaryValue)
+      .map((p, i) => ({
+        privyId: p.privyId || p.id || '',
+        name: p.name || '',
+        size: p.size || 0,
+        monetaryValue: p.monetaryValue || 0,
+        rank: i + 1
+      }));
+
+    dbShardCache[serverKey] = { updatedAt: nowMs(), players, top };
+
+    // Usernames: per-privy per-name ticks + Region tag; NEVER touch realName
+    const region = dbRegion(serverKey);
+    const store = dbUsernamesMem;
+    if (!store.players) store.players = {};
+
+    for (const pl of players) {
+      const privyId = pl.privyId || pl.id;
+      const name = pl.name || '';
+      if (!privyId || !name) continue;
+
+      if (!store.players[privyId]) {
+        store.players[privyId] = { realName: null, Region: region, usernames: {} };
+      }
+      const rec = store.players[privyId];
+      rec.Region = region;                                // single tag (US | EU)
+      rec.usernames[name] = (rec.usernames[name] || 0) + 1; // per-name count only
+    }
+    dbDirty = true;
+  } catch (e) {
+    console.error('[poll]', serverKey, e?.message || e);
+  }
+}
+
+// Poll all shards every 5s (fire-and-forget)
+setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
+
+// Persist usernames every 15s; keep polling/caching between writes
+setInterval(() => {
+  if (!dbDirty) return;
+  try {
+    fs.writeFileSync(USER_FILE, JSON.stringify(dbUsernamesMem, null, 2));
+    dbDirty = false;
+  } catch (e) {
+    console.error('[usernames write]', e?.message || e);
+  }
+}, 15000);
+
+// === Read-only endpoints (client consumes these) ============================
+// GET /api/game/leaderboard?serverKey=us-1
+app.get('/api/game/leaderboard', (req, res) => {
+  const serverKey = String(req.query.serverKey || '');
+  if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
+  const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
+  const stale = nowMs() - (snap.updatedAt || 0) > 8000;
+  res.json({ ok:true, serverKey, updatedAt: snap.updatedAt || 0, stale, entries: snap.top || [] });
+});
+
+// GET /api/game/usernames?serverKey=us-1
+app.get('/api/game/usernames', (req, res) => {
+  const serverKey = String(req.query.serverKey || '');
+  if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
+  res.json({ ok:true, serverKey, updatedAt: nowMs(), usernames: dbUsernamesMem });
+});
 
 // Paths
 const __filename = fileURLToPath(import.meta.url);
@@ -240,34 +339,7 @@ function queueJoin(privyId, name) {
   joinQueue.set(privyId, { name, count: prev.count + 1 });
 }
 
-// 🧱 your /trackJoin route stays the same except call queueJoin instead of writing immediately
-app.post("/api/user/trackJoin", (req, res) => {
-  const { privyId, name } = req.body || {};
-  if (!privyId || !name)
-    return res.status(400).json({ ok: false, error: "missing_fields" });
 
-  try {
-    let data = {};
-    if (fs.existsSync(USER_FILE)) {
-      data = JSON.parse(fs.readFileSync(USER_FILE, "utf8") || "{}");
-    } else {
-      data = { players: {} };
-    }
-
-    if (!data.players) data.players = {};
-    if (!data.players[privyId])
-      data.players[privyId] = { realName: null, usernames: {} };
-
-    const u = data.players[privyId];
-    u.usernames[name] = (u.usernames[name] || 0) + 1;
-
-    fs.writeFileSync(USER_FILE, JSON.stringify(data, null, 2));
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("trackJoin:", err);
-    res.status(500).json({ ok: false, error: "write_failed" });
-  }
-});
 
 
 // 🕓 flush queued joins every 2 min 30 sec
@@ -792,22 +864,7 @@ app.get("/api/user/alerts", async (req, res) => {
 });
 
 // ---------- username tracking ----------
-app.post("/api/user/trackJoin", async (req,res)=>{
-  const {privyId,name}=req.body||{};
-  if(!privyId||!name)return res.status(400).json({ok:false,error:"missing_fields"});
-   if (name.trim().toLowerCase() === "anonymous player") {
-    return res.status(200).json({ ok:true, skipped:true, reason:"default_anonymous" });
-  }
-  try{
-    const {data,sha}=await ghLoad(USERNAMES_FILE_PATH,{players:{}});
-    if(!data.players)data.players={};
-    if(!data.players[privyId])data.players[privyId]={realName:null,usernames:{}};
-    const u=data.players[privyId];
-    u.usernames[name]=(u.usernames[name]||0)+1;
-    await ghSave(USERNAMES_FILE_PATH,data,sha);
-    res.json({ok:true});
-  }catch(err){console.error("trackJoin:",err);res.status(500).json({ok:false,error:"write_failed"});}
-});
+
 
 app.get("/api/user/mapping", async (req,res)=>{
   try{
