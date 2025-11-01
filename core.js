@@ -15,9 +15,32 @@
   // CONFIG  (same as your script)
   // ==============================
   const USER_API_BASE = 'https://dbserver-8bhx.onrender.com/api/user';
+  // Backend base from user API base
+const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
+
+function getServerKeyFromURL() {
+  try {
+    const params = new URLSearchParams(location.search);
+    const serverId = (params.get('serverId') || '').toLowerCase();
+    const parts = serverId.split('-');
+    if (parts.length >= 2 && (parts[0] === 'us' || parts[0] === 'eu') && /^\d+$/.test(parts[1])) {
+      return `${parts[0]}-${parts[1]}`;
+    }
+  } catch {}
+  return 'us-1';
+}
+
+async function fetchLeaderboardFromBackend() {
+  const serverKey = getServerKeyFromURL();
+  const url = `${GAME_API_BASE}/api/game/leaderboard?serverKey=${encodeURIComponent(serverKey)}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('leaderboard ' + res.status);
+  const data = await res.json();
+  return Array.isArray(data.entries) ? data.entries : [];
+}
+
   const GAME_REGION = 'us';
   const GAME_AMOUNT = 1;
-  const PLAYERS_URL = `https://damnbruh-game-server-instance-${GAME_AMOUNT}-${GAME_REGION}.onrender.com/players`;
   const POLL_MS = 3000;
 
   const LS_BOX_POS_KEY = 'username_hud_pos_v1';
@@ -424,83 +447,50 @@
   // ==============================
   // Polling + Merge Logic
   // ==============================
-  window.__USERNAME_TRACKER_FLUSH__ = setInterval(() => {
-    if (localJoinBuffer.size === 0) return;
-    const payload = [];
-    for (const [key, count] of localJoinBuffer.entries()) {
-      const [privyId, name] = key.split("::");
-      payload.push({ privyId, name, count });
-    }
-    postJSON(USER_API_BASE + '/batchTrackJoin', { players: payload }).catch(()=>{});
-    localJoinBuffer.clear();
-  }, 60000);
+  // New: keep latest snapshot and render when either feed updates
+let __latestEntries__ = [];
+let __latestMapping__ = null;
 
-  async function fetchPlayers() {
-    try {
-      const { region, lobby } = getGameServerInfo();
-      const activeUrl = (region && lobby)
-        ? `https://damnbruh-game-server-instance-${lobby}-${region}.onrender.com/players`
-        : PLAYERS_URL;
-      const res = await fetch(activeUrl, { cache: "no-store" });
-      if (!res.ok) throw new Error("players " + res.status);
-      const data = await res.json();
-      const players = Array.isArray(data.players) ? data.players.slice() : [];
-      players.forEach((pl) => {
-        if (!pl.privyId || !pl.name) return;
-        const key = pl.privyId + "::" + pl.name;
-        const prev = localJoinBuffer.get(key) || 0;
-        localJoinBuffer.set(key, prev + 1);
-      });
-      return players;
-    } catch (e) {
-      console.warn("fetchPlayers failed:", e);
-      return [];
-    }
-  }
-
-  async function fetchMapping() {
-    try {
-      const res = await fetch(USER_API_BASE + '/mapping', { cache: 'no-store' });
-      if (!res.ok) throw new Error('mapping ' + res.status);
-      const data = await res.json();
-      if (data && data.players && Object.keys(data.players).length > 0) {
-        lastGoodMapping = data; lastMappingTime = Date.now(); return data;
-      }
-      if (lastGoodMapping && Date.now() - lastMappingTime < CACHE_TTL_MS) {
-        console.warn("⚠️ using cached mapping (empty response)");
-        return lastGoodMapping;
-      }
-      throw new Error("empty mapping, no cache");
-    } catch (e) {
-      if (lastGoodMapping && Date.now() - lastMappingTime < CACHE_TTL_MS) {
-        console.warn("⚠️ using cached mapping (fetch failed)", e);
-        return lastGoodMapping;
-      }
-      console.warn('fetchMapping failed:', e);
-      return { ok:false, players:{} };
-    }
-  }
-
-  async function pollAndRender() {
-    const [playersRaw, mapping] = await Promise.all([ fetchPlayers(), fetchMapping() ]);
-    const filtered = playersRaw.filter(p => (p.monetaryValue || 0) > 0);
-    const sorted = filtered.slice().sort((a,b) => (b.monetaryValue||0) - (a.monetaryValue||0));
+async function pollAndRenderLB() {
+  try {
+    const entries = await fetchLeaderboardFromBackend();
+    __latestEntries__ = entries;
     ensureLeaderboardBox();
-    renderLeaderboard(sorted, mapping);
+    const mapping = __latestMapping__ || (await fetchMapping().catch(()=>null));
+    if (mapping) __latestMapping__ = mapping;
+    renderLeaderboard(__latestEntries__, __latestMapping__ || { players: {} });
+  } catch (err) {
+    console.warn('LB poll failed:', err);
   }
+}
 
-  let pollTimer = null;
-  function startPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(pollAndRender, POLL_MS);
-    pollAndRender();
+async function pollAndRenderMapping() {
+  try {
+    const mapping = await fetchMapping();
+    __latestMapping__ = mapping;
+    ensureLeaderboardBox();
+    renderLeaderboard(__latestEntries__, __latestMapping__);
+  } catch (err) {
+    console.warn('Mapping poll failed:', err);
   }
-  function stopPolling() {
-    if (pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null; checkAlerts(); // kept exactly as in your script
-    }
-  }
+}
+
+// Timers (replace startPolling/stopPolling bodies)
+let lbTimer = null, mapTimer = null;
+function startPolling() {
+  if (lbTimer) clearInterval(lbTimer);
+  if (mapTimer) clearInterval(mapTimer);
+  lbTimer  = setInterval(pollAndRenderLB, 5000);  // 5 s
+  mapTimer = setInterval(pollAndRenderMapping, 7000); // 7 s
+  pollAndRenderLB();
+  pollAndRenderMapping();
+}
+function stopPolling() {
+  if (lbTimer)  { clearInterval(lbTimer);  lbTimer  = null; }
+  if (mapTimer) { clearInterval(mapTimer); mapTimer = null; }
+  checkAlerts();
+}
+
 
   // ==============================
   // 🔔 Alert poller (one-time display per ID)
