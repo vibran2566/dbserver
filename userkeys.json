@@ -49,9 +49,11 @@
     },
     {
       "key": "KEY-QCW4PTSJ",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-11-01T22:43:54.567Z"
+      "createdAt": "2025-11-01T22:43:54.567Z",
+      "usedAt": "2025-11-01T22:45:09.395Z",
+      "boundProof": "97152404382cd251343c803afac305aedb7e3452ad474d5ed035d4d967f05303"
     }
   ]
 }
