@@ -79,37 +79,42 @@ async function dbPollShard(serverKey) {
     const data = await rsp.json();
     const players = Array.isArray(data.players) ? data.players : [];
 
-    // Cache: filter to >2, sort desc, rank
-    const top = players
+    // Keep only real DIDs, non-anon names, size > 1
+    const filtered = players.filter(p => {
+      const did  = typeof p?.privyId === 'string' && p.privyId.startsWith('did:privy:');
+      const name = (p?.name || '').trim();
+      const size = typeof p?.size === 'number' ? p.size : 0;
+      return did && size > 1 && name && !/^anonymous player$/i.test(name);
+    });
+
+    // Leaderboard: require monetaryValue > 2, sort desc by monetaryValue
+    const top = filtered
       .filter(p => typeof p.monetaryValue === 'number' && p.monetaryValue > 2)
-      .sort((a,b) => b.monetaryValue - a.monetaryValue)
+      .sort((a, b) => (b.monetaryValue || 0) - (a.monetaryValue || 0))
       .map((p, i) => ({
-        privyId: p.privyId || p.id || '',
-        name: p.name || '',
-        size: p.size || 0,
-        monetaryValue: p.monetaryValue || 0,
+        privyId: p.privyId,
+        name: p.name.trim(),
+        size: p.size,
+        monetaryValue: p.monetaryValue,   // included for ordering/display
         rank: i + 1
       }));
 
-    dbShardCache[serverKey] = { updatedAt: nowMs(), players, top };
+    dbShardCache[serverKey] = { updatedAt: Date.now(), players: [], top };
 
-    // Usernames: per-privy per-name ticks + Region tag; NEVER touch realName
-    const region = dbRegion(serverKey);
-    const store = dbUsernamesMem;
-    if (!store.players) store.players = {};
-
-    for (const pl of players) {
-      const privyId = pl.privyId || pl.id;
-      const name = pl.name || '';
-      if (!privyId || !name) continue;
-
-      if (!store.players[privyId]) {
-        store.players[privyId] = { realName: null, Region: region, usernames: {} };
+    // Username ticks (persist DID + name + Region only)
+    const region = serverKey.startsWith('us-') ? 'US' : 'EU';
+    if (!dbUsernamesMem.players) dbUsernamesMem.players = {};
+    for (const pl of filtered) {
+      const did  = pl.privyId;
+      const name = pl.name.trim();
+      if (!dbUsernamesMem.players[did]) {
+        dbUsernamesMem.players[did] = { realName: null, Region: region, usernames: {} };
       }
-      const rec = store.players[privyId];
-      rec.Region = region;                                // single tag (US | EU)
-      rec.usernames[name] = (rec.usernames[name] || 0) + 1; // per-name count only
+      const rec = dbUsernamesMem.players[did];
+      rec.Region = region;                                 // single tag (US | EU)
+      rec.usernames[name] = (rec.usernames[name] || 0) + 1;
     }
+
     dbDirty = true;
   } catch (e) {
     console.error('[poll]', serverKey, e?.message || e);
