@@ -50,7 +50,7 @@
     {
       "key": "KEY-GAENCS0M",
       "used": true,
-      "revoked": false,
+      "revoked": true,
       "createdAt": "2025-10-31T23:34:18.649Z",
       "note": "Darkle Demo",
       "usedAt": "2025-10-31T23:39:50.565Z",
