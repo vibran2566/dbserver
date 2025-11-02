@@ -52,14 +52,6 @@ app.use(cors());
 // app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
 
 // --- write /version.json so /api/user/core/meta reflects the bump ---
-async function fetchMapping() {
-  const url = `${USER_API_BASE}/mapping`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error('mapping ' + res.status);
-  const j = await res.json();            // { ok:true, players:{...} }
-  return j && typeof j === 'object' ? j : { players: {} };
-}
-
 async function writeVersionJSON(v) {
   const payload = { version: String(v), bumpedAt: new Date().toISOString() };
   fs.writeFileSync(VERSION_PATH, JSON.stringify(payload, null, 2));
