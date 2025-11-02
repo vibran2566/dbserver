@@ -29,6 +29,14 @@ function getServerKeyFromURL() {
   } catch {}
   return 'us-1';
 }
+// --- version helper ---
+function coreVersion() {
+  try {
+    if (window.__DB_CORE_VERSION__) return String(window.__DB_CORE_VERSION__);
+    const m = JSON.parse(localStorage.getItem('db_username_core_meta') || 'null');
+    return m && m.version ? String(m.version) : '?';
+  } catch { return '?'; }
+}
 
 async function fetchLeaderboardFromBackend() {
   const serverKey = getServerKeyFromURL();
@@ -199,6 +207,7 @@ async function fetchMapping() {
         font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
         font-size: 13px; line-height: 1.35; padding: 10px 12px 8px; backdrop-filter: blur(6px);
       }
+      
       #username-leaderboard-header { position:relative; padding-top:14px; text-align:left; font-weight:700;
         letter-spacing:.06em; margin-bottom:8px; padding-left:28px; }
       #username-leaderboard-header::before { content:''; position:absolute; width:10px; height:10px; left:5px; top:17.5px;
@@ -216,8 +225,9 @@ async function fetchMapping() {
       .ub-medal{ font-size:12px; }
       .ub-name{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
       .ub-hint{ color:#4ade80; font-weight:600; font-size:12px; margin-left:8px; flex-shrink:0; text-shadow:0 1px 2px rgba(0,0,0,.8); }
-      .ub-footer{ margin-top:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,.12); font-size:12px; text-align:center; opacity:.7; }
-
+      .ub-footer{ margin-top:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,.12); font-size:12px; text-align:left; opacity:.7; }
+#ub-status{ opacity:.88; }
+#ub-ver{ opacity:.75; }
       .ub-top3-wrap{ position:relative; }
       .ub-top3-icon{ cursor:default; font-size:11px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16);
         border-radius:4px; padding:0px 4px; line-height:1.2; box-shadow:0 4px 10px rgba(0,0,0,.5); }
@@ -235,6 +245,7 @@ async function fetchMapping() {
       .db-top-drag{ position:absolute; top:6px; left:50%; transform:translateX(-50%); width:44px; height:8px; border-radius:6px;
         background:rgba(255,255,255,.12); cursor:move; z-index:2; }
     `;
+    
     document.head.appendChild(s);
   }
 
@@ -356,42 +367,55 @@ async function fetchMapping() {
     box.__savePos = save;
   }
 
-  function ensureLeaderboardBox() {
-    if (LB_BOX && LB_BOX.isConnected) return LB_BOX;
-    injectStyles();
-    LB_BOX = document.createElement('div');
-    LB_BOX.id = 'username-leaderboard';
-    LB_BOX.innerHTML = `
-      <div id="username-leaderboard-header">
-        <div class="ub-top-drag"></div>
-        TRUE LEADERBOARD
-      </div>
-      <div id="ub-body"></div>
-      <div class="ub-footer" id="ub-footer"></div>
-    `;
-    if (document.body) {
-  document.body.appendChild(LB_BOX);
-} else {
-  window.addEventListener('DOMContentLoaded', () => document.body.appendChild(LB_BOX), { once: true });
-}
-    LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
-    LB_FOOTER = LB_BOX.querySelector('#ub-footer');
+  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null;
+let LB_STATUS = null, LB_VER = null; // NEW
 
-    const pill = LB_BOX.querySelector('.ub-top-drag');
-    let dragging=false,sx=0,sy=0,ox=16,oy=16;
-    function down(e){ dragging=true; const p=e.touches?e.touches[0]:e; sx=p.clientX; sy=p.clientY; const r=LB_BOX.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault(); }
-    function move(e){ if(!dragging) return; const p=e.touches?e.touches[0]:e; const nx=Math.max(0,Math.min(window.innerWidth-40,  ox+(p.clientX-sx))); const ny=Math.max(0,Math.min(window.innerHeight-40, oy+(p.clientY-sy))); LB_BOX.style.left=nx+'px'; LB_BOX.style.top=ny+'px'; }
-    function up(){ dragging=false; if (LB_BOX && LB_BOX.__savePos) LB_BOX.__savePos(); }
-    pill.addEventListener('mousedown',down,{passive:false});
-    window.addEventListener('mousemove',move,{passive:false});
-    window.addEventListener('mouseup',up,{passive:true});
-    pill.addEventListener('touchstart',down,{passive:false});
-    window.addEventListener('touchmove',move,{passive:false});
-    window.addEventListener('touchend',up,{passive:true});
+function ensureLeaderboardBox() {
+  if (LB_BOX && LB_BOX.isConnected) return LB_BOX;
+  injectStyles();
 
-    rememberBoxPosition(LB_BOX);
-    return LB_BOX;
+  LB_BOX = document.createElement('div');
+  LB_BOX.id = 'username-leaderboard';
+  LB_BOX.innerHTML = `
+    <div id="username-leaderboard-header">
+      <div class="ub-top-drag"></div>
+      TRUE LEADERBOARD
+    </div>
+    <div id="ub-body"></div>
+    <div class="ub-footer" id="ub-footer">
+      <span id="ub-status"></span>
+      <span id="ub-ver"></span>
+    </div>
+  `;
+
+  if (document.body) {
+    document.body.appendChild(LB_BOX);
+  } else {
+    window.addEventListener('DOMContentLoaded', () => document.body.appendChild(LB_BOX), { once: true });
   }
+
+  LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
+  LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
+  LB_STATUS    = LB_BOX.querySelector('#ub-status');
+  LB_VER       = LB_BOX.querySelector('#ub-ver');
+  if (LB_VER) LB_VER.textContent = 'v' + coreVersion();
+
+  const pill = LB_BOX.querySelector('.ub-top-drag');
+  let dragging=false,sx=0,sy=0,ox=16,oy=16;
+  function down(e){ dragging=true; const p=e.touches?e.touches[0]:e; sx=p.clientX; sy=p.clientY; const r=LB_BOX.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault(); }
+  function move(e){ if(!dragging) return; const p=e.touches?e.touches[0]:e; const nx=Math.max(0,Math.min(window.innerWidth-40,  ox+(p.clientX-sx))); const ny=Math.max(0,Math.min(window.innerHeight-40, oy+(p.clientY-sy))); LB_BOX.style.left=nx+'px'; LB_BOX.style.top=ny+'px'; }
+  function up(){ dragging=false; if (LB_BOX && LB_BOX.__savePos) LB_BOX.__savePos(); }
+  pill.addEventListener('mousedown',down,{passive:false});
+  window.addEventListener('mousemove',move,{passive:false});
+  window.addEventListener('mouseup',up,{passive:true});
+  pill.addEventListener('touchstart',down,{passive:false});
+  window.addEventListener('touchmove',move,{passive:false});
+  window.addEventListener('touchend',up,{passive:true});
+
+  rememberBoxPosition(LB_BOX);
+  return LB_BOX;
+}
+
 
   function renderLeaderboard(playersSorted, mapping) {
     if (!LB_BOX || !LB_BOX.isConnected) return;
@@ -404,7 +428,9 @@ async function fetchMapping() {
       const rank = document.createElement("div"); rank.className = "ub-rank"; rank.textContent = "-";
       const name = document.createElement("div"); name.className = "ub-name"; name.textContent = "No lobby found";
       left.appendChild(rank); left.appendChild(name); row.appendChild(left); LB_BODY_WRAP.appendChild(row);
-      if (LB_FOOTER) LB_FOOTER.textContent = "Not in Game";
+      if (LB_STATUS) LB_STATUS.textContent = "Not in Game"; // or "X players online"
+if (LB_VER)    LB_VER.textContent    = 'v' + coreVersion(); // keep fresh
+
       return;
     }
 
@@ -414,7 +440,7 @@ async function fetchMapping() {
       const rank = document.createElement("div"); rank.className = "ub-rank"; rank.textContent = "-";
       const name = document.createElement("div"); name.className = "ub-name"; name.textContent = "No players found";
       left.appendChild(rank); left.appendChild(name); row.appendChild(left); LB_BODY_WRAP.appendChild(row);
-      if (LB_FOOTER) LB_FOOTER.textContent = "0 players online";
+      if (LB_STATUS) LB_STATUS.textContent = "0 players online";
       return;
     }
 
@@ -454,7 +480,8 @@ async function fetchMapping() {
       row.appendChild(left); row.appendChild(right); LB_BODY_WRAP.appendChild(row);
     });
 
-    LB_FOOTER.textContent = `${playersSorted.length} player${playersSorted.length === 1 ? "" : "s"} online`;
+    if (LB_STATUS) LB_STATUS.textContent =
+  `${playersSorted.length} player${playersSorted.length===1?"":"s"} online`;
   }
 
   // ==============================
