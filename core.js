@@ -411,7 +411,9 @@ async function fetchMapping() {
   // ==============================
   // Leaderboard UI
   // ==============================
-  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null;
+  var LB_BOX = (typeof LB_BOX !== 'undefined' ? LB_BOX : null);
+var LB_BODY_WRAP = (typeof LB_BODY_WRAP !== 'undefined' ? LB_BODY_WRAP : null);
+var LB_FOOTER = (typeof LB_FOOTER !== 'undefined' ? LB_FOOTER : null);
   function rememberBoxPosition(box) {
     try {
       const saved = JSON.parse(localStorage.getItem(LS_BOX_POS_KEY) || '{}');
