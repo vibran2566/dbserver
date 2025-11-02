@@ -73,18 +73,6 @@
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
       "version": "1.1.1"
-    },
-    {
-      "key": "KEY-2U275SQB",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-11-02T04:34:06.161Z",
-      "usedAt": "2025-11-02T04:34:10.847Z",
-      "boundProof": "f525951ea9d626c94cbed5111663eb7ff177d2b147859c595403d37fd0407345",
-      "coreVersion": "1.1.1",
-      "requiredCore": "1.1.1",
-      "version": "1.1.1",
-      "lastUsedAt": "2025-11-02T05:27:01.411Z"
     }
   ]
 }
