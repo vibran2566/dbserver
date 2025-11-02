@@ -546,7 +546,7 @@ app.post("/api/validate", async (req, res) => {
 // === Core update endpoints ===
 
 // Serve current version
-let ACTIVE_VERSION = "1.0.0"; // start version as string
+
 
 app.get("/api/core/version", (req, res) => {
   res.json({ version: ACTIVE_VERSION });
