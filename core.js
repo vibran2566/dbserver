@@ -426,7 +426,7 @@ var LB_VER      = (typeof LB_VER      !== 'undefined' ? LB_VER      : null);
   }
 
 
-let LB_STATUS = null, LB_VER = null; // NEW
+
 
 function onBodyReady(fn){
   if (document.body) return fn();
@@ -454,7 +454,6 @@ function ensureLeaderboardBox() {
     document.body.appendChild(LB_BOX);
     LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
     LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
-LB_STATUS = LB_BOX.querySelector('#ub-status');
 LB_VER    = LB_BOX.querySelector('#ub-ver');
 ensureFooterOverrideStyles();
 // initial paint
