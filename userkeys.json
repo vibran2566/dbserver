@@ -97,9 +97,11 @@
     },
     {
       "key": "KEY-76OZ6QLU",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-11-02T07:04:39.018Z"
+      "createdAt": "2025-11-02T07:04:39.018Z",
+      "usedAt": "2025-11-02T07:04:44.576Z",
+      "boundProof": "4784651bbbfc3396c3e4b4f601e60a93c9b856dfda09f6bcb1848d080c9f6217"
     }
   ]
 }
