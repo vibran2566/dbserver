@@ -20,6 +20,101 @@ const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
   let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null, LB_STATUS = null, LB_VER = null;
 
 
+
+// --- version helper ---
+function coreVersion() {
+  try {
+    if (window.__DB_CORE_VERSION__) return String(window.__DB_CORE_VERSION__);
+    const m = JSON.parse(localStorage.getItem('db_username_core_meta') || 'null');
+    return m && m.version ? String(m.version) : '?';
+  } catch { return '?'; }
+}
+
+function resolveGameKey() {
+  // 1) URL (several forms supported)
+  const sp = new URLSearchParams(location.search);
+  const sid   = (sp.get('serverId') || '').trim();      // us-5
+  const regionQ = (sp.get('region') || '').trim();      // us
+  const lobbyQ  = (sp.get('lobby')  || '').trim();      // 5
+  const amtQ    = (sp.get('amount') || '').trim();      // 5
+
+  // 2) LocalStorage (seen in your screenshot)
+  let app = null; try { app = JSON.parse(localStorage.getItem('db_app_state_v1')||'null'); } catch {}
+  const lsRegion = (localStorage.getItem('db_srv_region') || localStorage.getItem('selectedRegion') || localStorage.getItem('damnbruh-preferred-region') || '').trim();
+  const lsAmt    = (localStorage.getItem('db_srv_amount') || '').trim();
+
+  // 3) Path like /game/us-5
+  const mPath = location.pathname.match(/\/game\/(us|eu)-(\d+)/);
+
+  // Pick region + lobby with fallbacks
+  let region =
+    (sid.match(/^(us|eu)-\d+$/) ? sid.split('-')[0] : '') ||
+    (regionQ || (mPath && mPath[1]) || (app && app.region) || lsRegion || 'us');
+
+  let lobby =
+    (sid.match(/^(us|eu)-(\d+)$/) ? sid.split('-')[1] : '') ||
+    lobbyQ || amtQ || (mPath && mPath[2]) || (app && String(app.amount || '')) || lsAmt || '1';
+
+  region = region.toLowerCase();
+  lobby  = String(lobby).replace(/\D+/g,'') || '1';
+
+  return { region, lobby, serverKey: `${region}-${lobby}` };
+}
+
+async function fetchLeaderboardFromBackend() {
+  const { region, lobby, serverKey } = resolveGameKey();
+
+  const candidates = [
+    `${GAME_API_BASE}/api/game/leaderboard?serverKey=${encodeURIComponent(serverKey)}`,
+    `${GAME_API_BASE}/api/game/leaderboard?region=${encodeURIComponent(region)}&lobby=${encodeURIComponent(lobby)}`,
+    `${GAME_API_BASE}/api/game/leaderboard?region=${encodeURIComponent(region)}&amount=${encodeURIComponent(lobby)}`
+  ];
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      console.info('[LB] try', url, '→', res.status);
+
+      if (res.status === 404) continue;        // wrong shape; try next candidate
+      if (!res.ok) continue;
+
+      const j = await res.json().catch(() => ({}));
+      const entries =
+        (Array.isArray(j.entries) && j.entries) ||
+        (j.data && Array.isArray(j.data.entries) && j.data.entries) ||
+        (Array.isArray(j.data) && j.data) ||
+        [];
+
+      if (Array.isArray(entries)) return entries;
+    } catch (e) {
+      console.warn('[LB] fetch fail for', url, e);
+    }
+  }
+
+  // If we got here, we didn’t find a working shape
+  if (LB_STATUS) LB_STATUS.textContent = 'locating game state…';
+  return [];
+}
+
+(() => {
+  // Allow hot-reload style restart
+  if (window.__USERNAME_TRACKER__) {
+    try { window.__USERNAME_TRACKER__.stop?.(); } catch {}
+    delete window.__USERNAME_TRACKER__;
+  }
+  if (window.__USERNAME_TRACKER_FLUSH__) {
+    clearInterval(window.__USERNAME_TRACKER_FLUSH__);
+  }
+
+  // ==============================
+  // CONFIG  (same as your script)
+  // ==============================
+  const USER_API_BASE = 'https://dbserver-8bhx.onrender.com/api/user';
+  // Backend base from user API base
+const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
+  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null, LB_STATUS = null, LB_VER = null;
+
+
 function getServerKeyFromURL() {
   try {
     const params = new URLSearchParams(location.search);
@@ -31,6 +126,80 @@ function getServerKeyFromURL() {
   } catch {}
   return 'us-1';
 }
+// --- version helper ---
+function coreVersion() {
+  try {
+    if (window.__DB_CORE_VERSION__) return String(window.__DB_CORE_VERSION__);
+    const m = JSON.parse(localStorage.getItem('db_username_core_meta') || 'null');
+    return m && m.version ? String(m.version) : '?';
+  } catch { return '?'; }
+}
+
+// DamnBruh Username Tracker CORE
+// Runs after the base userscript validates and loads it.
+
+(() => {
+  // Allow hot-reload style restart
+  if (window.__USERNAME_TRACKER__) {
+    try { window.__USERNAME_TRACKER__.stop?.(); } catch {}
+    delete window.__USERNAME_TRACKER__;
+  }
+  if (window.__USERNAME_TRACKER_FLUSH__) {
+    clearInterval(window.__USERNAME_TRACKER_FLUSH__);
+  }
+
+  // ==============================
+  // CONFIG  (same as your script)
+  // ==============================
+  const USER_API_BASE = 'https://dbserver-8bhx.onrender.com/api/user';
+  // Backend base from user API base
+const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
+  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null, LB_STATUS = null, LB_VER = null;
+
+
+// Parse `serverId=us-1-dollar` → { region:'us', amount:'1' }
+function parseServerId() {
+  const sid = new URLSearchParams(location.search).get('serverId') || '';
+  const m = sid.match(/^(us|eu)-(1|5|20)\b/i);
+  if (m) return { region: m[1].toLowerCase(), amount: m[2] };
+
+  // fallback to localStorage if URL missing
+  try {
+    const st = JSON.parse(localStorage.getItem('db_app_state_v1') || 'null');
+    const region = (st?.region || localStorage.getItem('db_srv_region') || 'us').toLowerCase();
+    const amount = String(st?.amount || localStorage.getItem('db_srv_amount') || '1').replace(/\D+/g,'') || '1';
+    return { region, amount };
+  } catch {
+    return { region: 'us', amount: '1' };
+  }
+}
+
+// Build instance host like:
+// https://damnbruh-game-server-instance-5-us.onrender.com/players
+function playersEndpoint() {
+  const { region, amount } = parseServerId();
+  return `https://damnbruh-game-server-instance-${amount}-${region}.onrender.com/players`;
+}
+
+async function fetchLeaderboardFromBackend() {
+  const url = playersEndpoint();
+  console.info('[LB] GET', url);
+  const r = await fetch(url, { cache: 'no-store' });
+  if (!r.ok) throw new Error('players ' + r.status);
+  const j = await r.json();
+
+  // Normalize to array
+  const arr = Array.isArray(j) ? j : (Array.isArray(j.players) ? j.players : []);
+
+  // Map to the shape your renderer expects
+  return arr.map((p, i) => ({
+    name: p.name || p.username || `#${i+1}`,
+    privyId: p.privyId || p.id || p.playerId || null,
+    // default so rows don’t get filtered out downstream
+    monetaryValue: p.monetaryValue ?? 1
+  }));
+}
+
 // --- version helper ---
 function coreVersion() {
   try {
@@ -239,9 +408,12 @@ async function fetchMapping() {
   align-items:center;
   justify-content:space-between;/* ← split left/right */
   opacity:.7;
+  border-top: 1px solid rgba(255,255,255,.12);
 }
 #ub-status{ opacity:.88; }
 #ub-ver{ opacity:.75; }
+
+
 
       .ub-top3-wrap{ position:relative; }
       .ub-top3-icon{ cursor:default; font-size:11px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16);
@@ -461,7 +633,7 @@ if (LB_VER)    LB_VER.textContent    = 'v' + coreVersion(); // keep fresh
       const mapInfo = mapping.players?.[p.privyId] || null;
       const realName = mapInfo?.realName || null;
       const topUsernames = mapInfo?.topUsernames || [];
-      if (!p.name || (p.monetaryValue || 0) <= 0) return;
+      if (!p.name) return;
 
       const dispName = realName ? `${realName} (${p.name})` : p.name;
       let medalHTML = ""; if (rank === 1) medalHTML = "🥇"; else if (rank === 2) medalHTML = "🥈"; else if (rank === 3) medalHTML = "🥉"; else medalHTML = rank + ".";
@@ -612,7 +784,6 @@ function stopPolling() {
       }
     };
   }
-
-  startAll();
+startAll();
 
 })();
