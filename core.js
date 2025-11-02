@@ -33,20 +33,21 @@ function getServerKeyFromURL() {
 function coreVersionSync() {
   return typeof window.__DB_CORE_VER === "string" ? window.__DB_CORE_VER : "(unknown)";
 }
+
 async function refreshCoreVersion() {
   try {
     const r = await fetch(`${USER_API_BASE}/core/meta`, { cache: "no-store" });
     if (!r.ok) throw new Error("meta " + r.status);
     const j = await r.json();
-    const v = String(j.version || j.ver || "(unknown)");
+    const v = String(j.activeVersion || j.version || j.ver || "(unknown)");
     window.__DB_CORE_VER = v;
-    console.log("[DB CORE] loaded v" + v);
-    const el = document.getElementById("ub-ver");
-    if (el) el.textContent = "v" + v;
+    console.log("[CORE] loaded v " + v);
+    if (LB_VER) LB_VER.textContent = "v" + v;
   } catch (e) {
-    console.log("[DB CORE] meta fetch failed:", e?.message || e);
+    console.warn("[CORE] meta fetch failed:", e?.message || e);
   }
 }
+
 async function fetchMapping() {
   const url = `${USER_API_BASE}/mapping`;
   const res = await fetch(url, { cache: 'no-store' });
