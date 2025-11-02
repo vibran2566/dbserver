@@ -45,7 +45,7 @@ const GITHUB_REPO          = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json";
 const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || "userkeys.json";
 const USERNAMES_FILE_PATH  = process.env.USERNAMES_FILE_PATH  || "usernames.json";
-const CORE_PATH = path.join(__dirname, "core.js");
+
 
 // --- Core version + meta helpers ---
 const CORE_PATH = path.join(__dirname, "core.js");
