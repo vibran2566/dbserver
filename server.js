@@ -6,6 +6,8 @@ import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import crypto from "crypto";
+
 // === Local disk usernames store (disk-only) ================================
 const DATA_DIR = "/data";
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -43,6 +45,8 @@ const GITHUB_REPO          = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json";
 const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || "userkeys.json";
 const USERNAMES_FILE_PATH  = process.env.USERNAMES_FILE_PATH  || "usernames.json";
+const CORE_PATH = path.join(__dirname, "core.js");
+
 // --- Core version + meta helpers ---
 const CORE_PATH = path.join(__dirname, "core.js");
 let ACTIVE_VERSION = process.env.ACTIVE_VERSION || "1.1.1"; // default
@@ -309,15 +313,15 @@ const VERSION_PATH = path.join(__dirname, "version.json");
 
 app.get("/api/user/core/meta", (req, res) => {
   try {
-    const code = readCoreBytes();
-    const sha = sha256Hex(code);
-    res.setHeader("Cache-Control", "no-store");
-    res.json({ ok: true, activeVersion: ACTIVE_VERSION, sha256: sha });
+    const buf = fs.readFileSync(CORE_PATH);                       // exact bytes served
+    const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
+    res.json({ ok: true, activeVersion: ACTIVE_VERSION, sha256 });
   } catch (err) {
     console.error("meta:", err);
-    res.status(500).json({ ok:false, error:"meta_read_failed" });
+    res.status(500).json({ ok: false, error: "meta_read_failed" });
   }
 });
+
 
 
 // 🕐 username join queue
