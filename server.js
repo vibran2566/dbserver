@@ -154,6 +154,19 @@ async function dbPollShard(serverKey) {
         monetaryValue: Number(p.monetaryValue) || 0,
         rank: i + 1
       }));
+// feed mapping so icons can render
+for (const p of filtered) {
+  const id   = p.privyId;
+  const name = (p.name || '').trim();
+  if (id && name && !/^anonymous player$/i.test(name)) {
+    // update in-memory immediately (instant icons)
+    recordUsername({ privyId: id, username: name });
+    dbDirty = true;
+
+    // optional: also enqueue for the 15s disk flush path
+    __JOIN_BUFFER__.push({ privyId: id, username: name });
+  }
+}
 
     // ✅ keep filtered (for debugging) and top (for clients)
     dbShardCache[serverKey] = {
