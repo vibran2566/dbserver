@@ -9,9 +9,9 @@
       "boundProof": "e33e2e737fd6620bd7b574511ccad04e582411c83908ce0819322e7eed4a91f4",
       "note": "Mr-1221",
       "lastUsedAt": "2025-10-30T16:30:54.194Z",
-      "coreVersion": "1.1.0",
-      "requiredCore": "1.1.0",
-      "version": "1.1.0"
+      "coreVersion": "1.1.1",
+      "requiredCore": "1.1.1",
+      "version": "1.1.1"
     },
     {
       "key": "KEY-D7CDUFG0",
@@ -22,9 +22,9 @@
       "lastUsedAt": "2025-10-29T21:28:23.489Z",
       "usedAt": "2025-10-29T21:28:46.097Z",
       "boundProof": "5526c0465df49da9731100478f7c6e5fce03ac4faa0b7e59b847ccfbb78fff60",
-      "coreVersion": "1.1.0",
-      "requiredCore": "1.1.0",
-      "version": "1.1.0"
+      "coreVersion": "1.1.1",
+      "requiredCore": "1.1.1",
+      "version": "1.1.1"
     },
     {
       "key": "KEY-7BJ09GB9",
@@ -35,9 +35,9 @@
       "usedAt": "2025-10-29T14:39:22.456Z",
       "boundProof": "60b90dedd6ce256bab31d5d3e0a2e175c1f7baec5c954a4043244451d62bbb3b",
       "lastUsedAt": "2025-10-29T19:45:12.567Z",
-      "coreVersion": "1.1.0",
-      "requiredCore": "1.1.0",
-      "version": "1.1.0"
+      "coreVersion": "1.1.1",
+      "requiredCore": "1.1.1",
+      "version": "1.1.1"
     },
     {
       "key": "KEY-P6EBRNIM",
@@ -48,9 +48,9 @@
       "boundProof": "fafe8f489d2598d1c5ce4ea9a5d89ed345f4d890ad20201242b701b511ddd53c",
       "lastUsedAt": "2025-11-02T04:48:34.959Z",
       "note": "vibran PC",
-      "coreVersion": "1.1.0",
-      "requiredCore": "1.1.0",
-      "version": "1.1.0"
+      "coreVersion": "1.1.1",
+      "requiredCore": "1.1.1",
+      "version": "1.1.1"
     },
     {
       "key": "KEY-WJOHBZB6",
@@ -58,9 +58,9 @@
       "revoked": false,
       "createdAt": "2025-10-29T22:12:07.942Z",
       "note": "Ant",
-      "coreVersion": "1.1.0",
-      "requiredCore": "1.1.0",
-      "version": "1.1.0"
+      "coreVersion": "1.1.1",
+      "requiredCore": "1.1.1",
+      "version": "1.1.1"
     },
     {
       "key": "KEY-QCW4PTSJ",
@@ -70,9 +70,9 @@
       "usedAt": "2025-11-01T22:45:09.395Z",
       "boundProof": "97152404382cd251343c803afac305aedb7e3452ad474d5ed035d4d967f05303",
       "lastUsedAt": "2025-11-01T23:19:15.236Z",
-      "coreVersion": "1.1.0",
-      "requiredCore": "1.1.0",
-      "version": "1.1.0"
+      "coreVersion": "1.1.1",
+      "requiredCore": "1.1.1",
+      "version": "1.1.1"
     },
     {
       "key": "KEY-2U275SQB",
@@ -81,9 +81,9 @@
       "createdAt": "2025-11-02T04:34:06.161Z",
       "usedAt": "2025-11-02T04:34:10.847Z",
       "boundProof": "f525951ea9d626c94cbed5111663eb7ff177d2b147859c595403d37fd0407345",
-      "coreVersion": "1.1.0",
-      "requiredCore": "1.1.0",
-      "version": "1.1.0",
+      "coreVersion": "1.1.1",
+      "requiredCore": "1.1.1",
+      "version": "1.1.1",
       "lastUsedAt": "2025-11-02T04:35:15.695Z"
     }
   ]
