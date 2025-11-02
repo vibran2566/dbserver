@@ -63,6 +63,10 @@ app.use(morgan("tiny"));
 app.use(express.json({ limit: "256kb" }));
 app.use(cors());
 // app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
+function fileSha256Hex(p) {
+  const buf = fs.readFileSync(p);               // exact bytes you will send
+  return crypto.createHash("sha256").update(buf).digest("hex");
+}
 
 // --- write /version.json so /api/user/core/meta reflects the bump ---
 async function writeVersionJSON(v) {
@@ -288,21 +292,14 @@ app.get("/api/user/mapping", (req, res) => {
 });
 app.get("/api/user/core/download", (req, res) => {
   try {
-    const code = readCoreBytes();
-    const sha = sha256Hex(code);
-
-    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader("ETag", `"${sha}"`);
-    res.setHeader("X-Core-Version", ACTIVE_VERSION);
-    res.setHeader("X-Core-SHA256", sha);
-
-    // Append a small banner so you can see what arrived in DevTools
-    const banner = `\n/* CORE delivered v${ACTIVE_VERSION} sha256=${sha.slice(0,8)} */\n`;
-    res.send(code + banner);
+    if (!fs.existsSync(CORE_PATH)) return res.status(404).json({ ok:false, error:"core_missing" });
+    const etag = fileSha256Hex(CORE_PATH);
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    res.setHeader("ETag", etag);
+    res.sendFile(CORE_PATH);
   } catch (err) {
-    console.error("core download:", err);
-    res.status(500).send("// core_read_failed");
+    console.error("download:", err);
+    res.status(500).json({ ok:false, error:"download_failed" });
   }
 });
 
@@ -312,8 +309,8 @@ const VERSION_PATH = path.join(__dirname, "version.json");
 
 app.get("/api/user/core/meta", (req, res) => {
   try {
-    const buf = fs.readFileSync(CORE_PATH);                       // exact bytes served
-    const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
+    const sha256 = fileSha256Hex(CORE_PATH);
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
     res.json({ ok: true, activeVersion: ACTIVE_VERSION, sha256 });
   } catch (err) {
     console.error("meta:", err);
