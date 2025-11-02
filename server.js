@@ -51,6 +51,31 @@ app.use(express.json({ limit: "256kb" }));
 app.use(cors());
 // app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
 
+// --- write /version.json so /api/user/core/meta reflects the bump ---
+async function writeVersionJSON(v) {
+  const payload = { version: String(v), bumpedAt: new Date().toISOString() };
+  fs.writeFileSync(VERSION_PATH, JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+// --- sync the version onto every app key record in both key files ---
+async function syncCoreVersionAcrossKeys(newVersion) {
+  const files = [GITHUB_FILE_PATH, USERKEYS_FILE_PATH]; // size keys + username keys
+  for (const FILE of files) {
+    const { data, sha } = await ghLoad(FILE, { keys: [] });
+    let changed = false;
+
+    // set whichever field name you actually use in your admin panel
+    const FIELDS = ["coreVersion", "requiredCore", "version"];
+    for (const k of (data.keys || [])) {
+      for (const f of FIELDS) {
+        if (k[f] !== newVersion) { k[f] = newVersion; changed = true; }
+      }
+    }
+
+    if (changed) await ghSave(FILE, data, sha);
+  }
+}
 
 // === DamnBruh shard polling & usernames (ADD) ===============================
 // Poll these 6 shards every 5s (server-side only; client never hits /players)
@@ -508,7 +533,7 @@ app.get("/api/core/version", (req, res) => {
   res.json({ version: ACTIVE_VERSION });
 });
 
-app.post("/api/core/bump", (req, res) => {
+app.post("/api/core/bump", async (req, res) => {
   const auth = req.headers.authorization;
   if (auth !== `Bearer ${ADMIN_TOKEN}`) {
     return res.status(403).json({ error: "unauthorized" });
@@ -519,20 +544,26 @@ app.post("/api/core/bump", (req, res) => {
     return res.status(400).json({ error: "invalid version format (use x.y.z)" });
   }
 
-  // compare semver numerically
+  // numeric compare vs ACTIVE_VERSION
   const toNum = v => v.split(".").map(Number);
   const [a1, a2, a3] = toNum(ACTIVE_VERSION);
   const [b1, b2, b3] = toNum(version);
   const isNewer = b1 > a1 || (b1 === a1 && (b2 > a2 || (b2 === a2 && b3 > a3)));
+  if (!isNewer) return res.status(400).json({ error: "version must be higher than current" });
 
-  if (!isNewer) {
-    return res.status(400).json({ error: "version must be higher than current" });
+  try {
+    ACTIVE_VERSION = version;
+    const vfile = await writeVersionJSON(version);             // keep /core/meta in sync
+    await syncCoreVersionAcrossKeys(version);                   // update app-key records
+
+    console.log(`✅ Core bumped to ${version} and synced into keys`);
+    return res.json({ ok: true, version, meta: vfile });
+  } catch (e) {
+    console.error("core/bump sync failed:", e);
+    return res.status(500).json({ ok: false, error: "bump_sync_failed" });
   }
-
-  ACTIVE_VERSION = version;
-  console.log(`✅ Core bumped to version ${ACTIVE_VERSION}`);
-  res.json({ ok: true, version: ACTIVE_VERSION });
 });
+
 
 
 
