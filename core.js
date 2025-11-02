@@ -462,6 +462,12 @@ function ensureLeaderboardBox() {
     document.body.appendChild(LB_BOX);
     LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
     LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
+LB_STATUS = LB_BOX.querySelector('#ub-status');
+LB_VER    = LB_BOX.querySelector('#ub-ver');
+ensureFooterOverrideStyles();
+// initial paint
+if (LB_STATUS) LB_STATUS.textContent = "Not in Game";
+if (LB_VER)    LB_VER.textContent = "v" + coreVersionSync();
 
     const pill = LB_BOX.querySelector('.ub-top-drag');
     let dragging=false,sx=0,sy=0,ox=16,oy=16;
@@ -673,16 +679,14 @@ function stopPolling() {
   // Start immediately (no key UI in core)
   // ==============================
   function startAll() {
-    ensureLeaderboardBox();
-    startPolling();
-    window.__USERNAME_TRACKER__ = {
-      stop() {
-        stopPolling();
-        if (LB_BOX && LB_BOX.parentNode) LB_BOX.parentNode.removeChild(LB_BOX);
-        LB_BOX = null;
-      }
-    };
-  }
+  ensureLeaderboardBox();
+  refreshCoreVersion();          // <— add this
+  startPolling();
+  window.__USERNAME_TRACKER__ = {
+    stop() { stopPolling(); if (LB_BOX?.parentNode) LB_BOX.parentNode.removeChild(LB_BOX); LB_BOX = null; }
+  };
+}
+
 
   startAll();
 
