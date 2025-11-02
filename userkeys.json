@@ -61,18 +61,6 @@
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
       "version": "1.1.1"
-    },
-    {
-      "key": "KEY-QCW4PTSJ",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-11-01T22:43:54.567Z",
-      "usedAt": "2025-11-01T22:45:09.395Z",
-      "boundProof": "97152404382cd251343c803afac305aedb7e3452ad474d5ed035d4d967f05303",
-      "lastUsedAt": "2025-11-01T23:19:15.236Z",
-      "coreVersion": "1.1.1",
-      "requiredCore": "1.1.1",
-      "version": "1.1.1"
     }
   ]
 }
