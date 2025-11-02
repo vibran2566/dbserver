@@ -29,6 +29,42 @@ function getServerKeyFromURL() {
   } catch {}
   return 'us-1';
 }
+  // ---- Version helpers (core) ----
+function coreVersionSync() {
+  return typeof window.__DB_CORE_VER === "string" ? window.__DB_CORE_VER : "(unknown)";
+}
+async function refreshCoreVersion() {
+  try {
+    const r = await fetch(`${USER_API_BASE}/core/meta`, { cache: "no-store" });
+    if (!r.ok) throw new Error("meta " + r.status);
+    const j = await r.json();
+    const v = String(j.version || j.ver || "(unknown)");
+    window.__DB_CORE_VER = v;
+    console.log("[DB CORE] loaded v" + v);
+    const el = document.getElementById("ub-ver");
+    if (el) el.textContent = "v" + v;
+  } catch (e) {
+    console.log("[DB CORE] meta fetch failed:", e?.message || e);
+  }
+}
+
+// ---- Footer style overrides (safe to add even if base styles already exist) ----
+function ensureFooterOverrideStyles() {
+  if (document.getElementById("dbk-styles-usernames-ovr")) return;
+  const s = document.createElement("style");
+  s.id = "dbk-styles-usernames-ovr";
+  s.textContent = `
+    #username-leaderboard .ub-footer{
+      display:flex; align-items:center; justify-content:space-between;
+      margin-top:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,.12);
+      font-size:12px; opacity:.7; text-align:left;
+    }
+    #ub-status{ opacity:.88; }
+    #ub-ver{ opacity:.75; }
+  `;
+  document.head.appendChild(s);
+}
+
 // --- version helper ---
 function coreVersion() {
   try {
@@ -384,21 +420,21 @@ let LB_STATUS = null, LB_VER = null; // NEW
 function ensureLeaderboardBox() {
   if (LB_BOX && LB_BOX.isConnected) return LB_BOX;
   injectStyles();
+  ensureFooterOverrideStyles(); // NEW: guarantees the left/right layout
 
   LB_BOX = document.createElement('div');
   LB_BOX.id = 'username-leaderboard';
   LB_BOX.innerHTML = `
-  <div id="username-leaderboard-header">
-    <div class="ub-top-drag"></div>
-    TRUE LEADERBOARD
-  </div>
-  <div id="ub-body"></div>
-  <div class="ub-footer" id="ub-footer">
-    <span id="ub-status"></span>
-    <span id="ub-ver"></span>
-  </div>
-`;
-
+    <div id="username-leaderboard-header">
+      <div class="ub-top-drag"></div>
+      TRUE LEADERBOARD
+    </div>
+    <div id="ub-body"></div>
+    <div class="ub-footer" id="ub-footer">
+      <span id="ub-status"></span>
+      <span id="ub-ver"></span>
+    </div>
+  `;
 
   if (document.body) {
     document.body.appendChild(LB_BOX);
@@ -406,18 +442,14 @@ function ensureLeaderboardBox() {
     window.addEventListener('DOMContentLoaded', () => document.body.appendChild(LB_BOX), { once: true });
   }
 
- LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
-LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
-LB_STATUS    = LB_BOX.querySelector('#ub-status');
-LB_VER       = LB_BOX.querySelector('#ub-ver');
+  LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
+  LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
+  LB_STATUS    = LB_BOX.querySelector('#ub-status');
+  LB_VER       = LB_BOX.querySelector('#ub-ver');
 
-const v = 'v' + coreVersion();
-if (LB_VER) LB_VER.textContent = v;
-
-// one-time console marker so you can see the update took effect
-console.log('[DB CORE] loaded', v, 'from', USER_API_BASE);
-LB_BOX.dataset.core = v; // optional: visible in Elements panel
-
+  // show whatever we know right now; refresh will correct it
+  if (LB_VER) LB_VER.textContent = "v" + coreVersionSync();
+  console.log("[DB CORE] up", coreVersionSync());
 
   const pill = LB_BOX.querySelector('.ub-top-drag');
   let dragging=false,sx=0,sy=0,ox=16,oy=16;
@@ -432,8 +464,13 @@ LB_BOX.dataset.core = v; // optional: visible in Elements panel
   window.addEventListener('touchend',up,{passive:true});
 
   rememberBoxPosition(LB_BOX);
+
+  // kick off async version fetch (will also update footer)
+  refreshCoreVersion();
+
   return LB_BOX;
 }
+
 
 
   function renderLeaderboard(playersSorted, mapping) {
@@ -499,11 +536,12 @@ if (LB_VER)    LB_VER.textContent    = 'v' + coreVersion(); // keep fresh
       row.appendChild(left); row.appendChild(right); LB_BODY_WRAP.appendChild(row);
     });
 
-    if (LB_STATUS) LB_STATUS.textContent =
-  `${playersSorted.length} player${playersSorted.length===1?"":"s"} online`;
-    if (LB_STATUS) LB_STATUS.textContent =
-  `${playersSorted.length} player${playersSorted.length===1?"":"s"} online`;
-if (LB_VER) LB_VER.textContent = 'v' + coreVersion();  // ensure it’s always shown
+   if (LB_STATUS) {
+  const n = Array.isArray(playersSorted) ? playersSorted.length : 0;
+  LB_STATUS.textContent = `${n} player${n===1 ? "" : "s"} online`;
+}
+if (LB_VER) LB_VER.textContent = "v" + coreVersionSync();
+
 
   }
 
