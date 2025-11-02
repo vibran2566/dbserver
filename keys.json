@@ -19,10 +19,12 @@
     },
     {
       "key": "KEY-XKRT7P8B",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T13:06:45.933Z",
-      "note": "Kitmeef"
+      "note": "Kitmeef",
+      "usedAt": "2025-11-02T03:25:56.500Z",
+      "boundProof": "63ce1b6dd76d87850658df49e3c66710be8586834d0dd6120415eade43335cc4"
     },
     {
       "key": "KEY-EJJGM5VH",
