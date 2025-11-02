@@ -151,6 +151,17 @@ async function fetchLeaderboardFromBackend() {
     }
     return { region: null, lobby: null };
   }
+// add just below fetchLeaderboardFromBackend()
+async function fetchMapping() {
+  try {
+    const res = await fetch(`${USER_API_BASE}/mapping`, { cache: 'no-store' });
+    if (!res.ok) return { players: {} };
+    const j = await res.json().catch(() => ({}));
+    return (j && typeof j === 'object' && j.players) ? j : { players: {} };
+  } catch {
+    return { players: {} };
+  }
+}
 
   function postJSON(url, data, timeoutMs = 8000) {
     return new Promise((resolve) => {
@@ -218,9 +229,20 @@ async function fetchLeaderboardFromBackend() {
       .ub-medal{ font-size:12px; }
       .ub-name{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
       .ub-hint{ color:#4ade80; font-weight:600; font-size:12px; margin-left:8px; flex-shrink:0; text-shadow:0 1px 2px rgba(0,0,0,.8); }
-      .ub-footer{ margin-top:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,.12); font-size:12px; text-align:left; opacity:.7; }
+      // in injectStyles() replace your .ub-footer block with this:
+.ub-footer{
+  margin-top:8px;
+  padding-top:6px;
+  border-top:1px solid rgba(255,255,255,.12);
+  font-size:12px;
+  display:flex;                /* ← make it flex */
+  align-items:center;
+  justify-content:space-between;/* ← split left/right */
+  opacity:.7;
+}
 #ub-status{ opacity:.88; }
 #ub-ver{ opacity:.75; }
+
       .ub-top3-wrap{ position:relative; }
       .ub-top3-icon{ cursor:default; font-size:11px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16);
         border-radius:4px; padding:0px 4px; line-height:1.2; box-shadow:0 4px 10px rgba(0,0,0,.5); }
