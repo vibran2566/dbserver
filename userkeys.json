@@ -89,7 +89,7 @@
     {
       "key": "KEY-1I6MCAZV",
       "used": true,
-      "revoked": false,
+      "revoked": true,
       "createdAt": "2025-11-02T05:28:08.623Z",
       "usedAt": "2025-11-02T05:28:15.407Z",
       "boundProof": "5a100914f3788266fd0dbb240f34357354c02cb64e59fd97533c0984c4d0a054",
