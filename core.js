@@ -47,6 +47,13 @@ async function refreshCoreVersion() {
     console.log("[DB CORE] meta fetch failed:", e?.message || e);
   }
 }
+async function fetchMapping() {
+  const url = `${USER_API_BASE}/mapping`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('mapping ' + res.status);
+  const j = await res.json();            // { ok:true, players:{...} }
+  return j && typeof j === 'object' ? j : { players: {} };
+}
 
 // ---- Footer style overrides (safe to add even if base styles already exist) ----
 function ensureFooterOverrideStyles() {
@@ -417,59 +424,53 @@ async function fetchMapping() {
   let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null;
 let LB_STATUS = null, LB_VER = null; // NEW
 
+function onBodyReady(fn){
+  if (document.body) return fn();
+  const mo = new MutationObserver(() => {
+    if (document.body) { mo.disconnect(); fn(); }
+  });
+  mo.observe(document.documentElement, { childList:true, subtree:true });
+}
+
 function ensureLeaderboardBox() {
   if (LB_BOX && LB_BOX.isConnected) return LB_BOX;
   injectStyles();
-  ensureFooterOverrideStyles(); // NEW: guarantees the left/right layout
 
-  LB_BOX = document.createElement('div');
-  LB_BOX.id = 'username-leaderboard';
-  LB_BOX.innerHTML = `
-    <div id="username-leaderboard-header">
-      <div class="ub-top-drag"></div>
-      TRUE LEADERBOARD
-    </div>
-    <div id="ub-body"></div>
-    <div class="ub-footer" id="ub-footer">
-      <span id="ub-status"></span>
-      <span id="ub-ver"></span>
-    </div>
-  `;
-
-  if (document.body) {
+  const make = () => {
+    LB_BOX = document.createElement('div');
+    LB_BOX.id = 'username-leaderboard';
+    LB_BOX.innerHTML = `
+      <div id="username-leaderboard-header">
+        <div class="ub-top-drag"></div>
+        TRUE LEADERBOARD
+      </div>
+      <div id="ub-body"><div class="ub-row"><div class="ub-left"><div class="ub-rank">-</div><div class="ub-name">Loading…</div></div></div></div>
+      <div class="ub-footer" id="ub-footer"><span id="ub-status">Starting…</span><span id="ub-ver" style="float:right"></span></div>
+    `;
     document.body.appendChild(LB_BOX);
-  } else {
-    window.addEventListener('DOMContentLoaded', () => document.body.appendChild(LB_BOX), { once: true });
-  }
+    LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
+    LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
 
-  LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
-  LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
-  LB_STATUS    = LB_BOX.querySelector('#ub-status');
-  LB_VER       = LB_BOX.querySelector('#ub-ver');
+    const pill = LB_BOX.querySelector('.ub-top-drag');
+    let dragging=false,sx=0,sy=0,ox=16,oy=16;
+    function down(e){ dragging=true; const p=e.touches?e.touches[0]:e; sx=p.clientX; sy=p.clientY; const r=LB_BOX.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault(); }
+    function move(e){ if(!dragging) return; const p=e.touches?e.touches[0]:e; const nx=Math.max(0,Math.min(window.innerWidth-40,  ox+(p.clientX-sx))); const ny=Math.max(0,Math.min(window.innerHeight-40, oy+(p.clientY-sy))); LB_BOX.style.left=nx+'px'; LB_BOX.style.top=ny+'px'; }
+    function up(){ dragging=false; if (LB_BOX && LB_BOX.__savePos) LB_BOX.__savePos(); }
+    pill.addEventListener('mousedown',down,{passive:false});
+    window.addEventListener('mousemove',move,{passive:false});
+    window.addEventListener('mouseup',up,{passive:true});
+    pill.addEventListener('touchstart',down,{passive:false});
+    window.addEventListener('touchmove',move,{passive:false});
+    window.addEventListener('touchend',up,{passive:true});
 
-  // show whatever we know right now; refresh will correct it
-  if (LB_VER) LB_VER.textContent = "v" + coreVersionSync();
-  console.log("[DB CORE] up", coreVersionSync());
+    rememberBoxPosition(LB_BOX);
+    console.info('[CORE] LB box created');
+  };
 
-  const pill = LB_BOX.querySelector('.ub-top-drag');
-  let dragging=false,sx=0,sy=0,ox=16,oy=16;
-  function down(e){ dragging=true; const p=e.touches?e.touches[0]:e; sx=p.clientX; sy=p.clientY; const r=LB_BOX.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault(); }
-  function move(e){ if(!dragging) return; const p=e.touches?e.touches[0]:e; const nx=Math.max(0,Math.min(window.innerWidth-40,  ox+(p.clientX-sx))); const ny=Math.max(0,Math.min(window.innerHeight-40, oy+(p.clientY-sy))); LB_BOX.style.left=nx+'px'; LB_BOX.style.top=ny+'px'; }
-  function up(){ dragging=false; if (LB_BOX && LB_BOX.__savePos) LB_BOX.__savePos(); }
-  pill.addEventListener('mousedown',down,{passive:false});
-  window.addEventListener('mousemove',move,{passive:false});
-  window.addEventListener('mouseup',up,{passive:true});
-  pill.addEventListener('touchstart',down,{passive:false});
-  window.addEventListener('touchmove',move,{passive:false});
-  window.addEventListener('touchend',up,{passive:true});
-
-  rememberBoxPosition(LB_BOX);
-
-  // kick off async version fetch (will also update footer)
-  refreshCoreVersion();
-
+  if (document.body) make(); else onBodyReady(make);
   return LB_BOX;
 }
+
 
 
 
@@ -555,13 +556,16 @@ let __latestMapping__ = null;
 async function pollAndRenderLB() {
   try {
     const entries = await fetchLeaderboardFromBackend();
-    __latestEntries__ = entries;
+    __latestEntries__ = Array.isArray(entries) ? entries : [];
     ensureLeaderboardBox();
-    const mapping = __latestMapping__ || (await fetchMapping().catch(()=>null));
-    if (mapping) __latestMapping__ = mapping;
-    renderLeaderboard(__latestEntries__, __latestMapping__ || { players: {} });
+    renderLeaderboard(__latestEntries__, __latestMapping__ || { players:{} });
+    if (LB_FOOTER) {
+      const s = document.getElementById('ub-status');
+      if (s) s.textContent = `${__latestEntries__.length} player${__latestEntries__.length===1?'':'s'} online`;
+    }
+    console.info('[CORE] LB fetch ok, entries=', __latestEntries__.length);
   } catch (err) {
-    console.warn('LB poll failed:', err);
+    console.warn('[CORE] LB poll failed:', err);
   }
 }
 
@@ -571,21 +575,27 @@ async function pollAndRenderMapping() {
     __latestMapping__ = mapping;
     ensureLeaderboardBox();
     renderLeaderboard(__latestEntries__, __latestMapping__);
+    const v = (window.__DB_CORE_VERSION__ || 'unknown');
+    const ver = document.getElementById('ub-ver');
+    if (ver) ver.textContent = `v${v}`;
+    console.info('[CORE] mapping fetch ok');
   } catch (err) {
-    console.warn('Mapping poll failed:', err);
+    console.warn('[CORE] mapping poll failed:', err);
   }
 }
 
-// Timers (replace startPolling/stopPolling bodies)
+// start timers
 let lbTimer = null, mapTimer = null;
 function startPolling() {
+  ensureLeaderboardBox();
   if (lbTimer) clearInterval(lbTimer);
   if (mapTimer) clearInterval(mapTimer);
-  lbTimer  = setInterval(pollAndRenderLB, 5000);  // 5 s
-  mapTimer = setInterval(pollAndRenderMapping, 7000); // 7 s
+  lbTimer  = setInterval(pollAndRenderLB,   5000);
+  mapTimer = setInterval(pollAndRenderMapping, 7000);
   pollAndRenderLB();
   pollAndRenderMapping();
 }
+
 function stopPolling() {
   if (lbTimer)  { clearInterval(lbTimer);  lbTimer  = null; }
   if (mapTimer) { clearInterval(mapTimer); mapTimer = null; }
