@@ -317,33 +317,33 @@ try {
 }
 
 
-app.post("/api/user/admin/set-name", (req, res) => {
-  const { did, name } = req.body;
-  if (!did?.startsWith("did:privy:") || !name) {
-    return res.status(400).json({ message: "Invalid DID or name" });
-  }
-
+app.post("/api/user/admin/set-name", express.json(), async (req, res) => {
   try {
-    let data = {};
-    if (fs.existsSync(USER_FILE)) {
-      data = JSON.parse(fs.readFileSync(USER_FILE, "utf8") || "{}");
+    const { did, name } = req.body || {};
+    if (!did || !did.startsWith("did:privy:") || !name) {
+      return res.status(400).json({ ok:false, error:"invalid_input" });
     }
+    const clean = String(name).trim().slice(0, 64);
 
-    // ensure top-level structure
-    if (!data.players) data.players = {};
+    // ensure player exists in the in-memory map
+    const p = (__USERNAME_MAPPING__.players[did] ||= {
+      realName: null,
+      usernames: {},
+      topUsernames: [],
+      firstSeen: Date.now(),
+      lastSeen: 0
+    });
 
-    // ensure player object exists
-    if (!data.players[did])
-      data.players[did] = { realName: null, usernames: {} };
+    p.realName = clean;
+    __USERNAME_MAPPING__.updatedAt = Date.now();
 
-    // update real name
-    data.players[did].realName = name;
+    // persist immediately so the file and memory match
+    await flushUsernamesNow();
 
-    fs.writeFileSync(USER_FILE, JSON.stringify(data, null, 2));
-    res.json({ ok: true, message: `✅ Set ${did} → ${name}` });
-  } catch (err) {
-    console.error("set-name error:", err);
-    res.status(500).json({ ok: false, message: "Server error" });
+    res.json({ ok:true, did, realName: p.realName });
+  } catch (e) {
+    console.error("set-name:", e);
+    res.status(500).json({ ok:false, error:"flush_failed" });
   }
 });
 
