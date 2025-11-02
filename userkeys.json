@@ -73,6 +73,12 @@
       "coreVersion": "1.0.9",
       "requiredCore": "1.0.9",
       "version": "1.0.9"
+    },
+    {
+      "key": "KEY-2U275SQB",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-11-02T04:34:06.161Z"
     }
   ]
 }
