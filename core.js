@@ -54,6 +54,17 @@ async function fetchMapping() {
   const j = await res.json();            // { ok:true, players:{...} }
   return j && typeof j === 'object' ? j : { players: {} };
 }
+window.__USERNAME_TRACKER__ = {
+  debug(){
+    console.log({
+      lbBoxPresent: !!(LB_BOX && LB_BOX.isConnected),
+      entries: __latestEntries__.length,
+      hasMapping: !!__latestMapping__,
+      urlLB: `${GAME_API_BASE}/api/game/leaderboard?serverKey=${encodeURIComponent(getServerKeyFromURL())}`,
+      urlMap: `${USER_API_BASE}/mapping`
+    });
+  }
+};
 
 // ---- Footer style overrides (safe to add even if base styles already exist) ----
 function ensureFooterOverrideStyles() {
