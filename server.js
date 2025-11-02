@@ -43,7 +43,19 @@ const GITHUB_REPO          = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json";
 const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || "userkeys.json";
 const USERNAMES_FILE_PATH  = process.env.USERNAMES_FILE_PATH  || "usernames.json";
-- 
+// --- Core version + meta helpers ---
+const CORE_PATH = path.join(__dirname, "core.js");
+let ACTIVE_VERSION = process.env.ACTIVE_VERSION || "1.1.1"; // default
+
+function readCoreBytes() {
+  const code = fs.readFileSync(CORE_PATH, "utf8");
+  return code;
+}
+function sha256Hex(bufStr) {
+  const crypto = await import('node:crypto');
+  return crypto.createHash('sha256').update(bufStr, 'utf8').digest('hex');
+}
+
 
 app.use(express.static(__dirname));
 app.use(morgan("tiny"));
@@ -274,32 +286,41 @@ app.get("/api/user/mapping", (req, res) => {
   }
 });
 app.get("/api/user/core/download", (req, res) => {
-  const { key } = req.query;
-  // validate key if needed
-  const corePath = path.join(__dirname, "core.js"); 
+  try {
+    const code = readCoreBytes();
+    const sha = sha256Hex(code);
 
-  if (!fs.existsSync(corePath))
-    return res.status(404).json({ ok: false, error: "core_missing" });
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("ETag", `"${sha}"`);
+    res.setHeader("X-Core-Version", ACTIVE_VERSION);
+    res.setHeader("X-Core-SHA256", sha);
 
-  res.sendFile(corePath);
+    // Append a small banner so you can see what arrived in DevTools
+    const banner = `\n/* CORE delivered v${ACTIVE_VERSION} sha256=${sha.slice(0,8)} */\n`;
+    res.send(code + banner);
+  } catch (err) {
+    console.error("core download:", err);
+    res.status(500).send("// core_read_failed");
+  }
 });
+
 
 const VERSION_PATH = path.join(__dirname, "version.json");
 
 
 app.get("/api/user/core/meta", (req, res) => {
   try {
-    if (!fs.existsSync(VERSION_PATH))
-      return res.status(404).json({ ok: false, error: "version_file_missing" });
-
-    const raw = fs.readFileSync(VERSION_PATH, "utf8");
-    const json = JSON.parse(raw);
-    res.json({ ok: true, ...json });
+    const code = readCoreBytes();
+    const sha = sha256Hex(code);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ok: true, activeVersion: ACTIVE_VERSION, sha256: sha });
   } catch (err) {
     console.error("meta:", err);
-    res.status(500).json({ ok: false, error: "meta_read_failed" });
+    res.status(500).json({ ok:false, error:"meta_read_failed" });
   }
 });
+
 
 // 🕐 username join queue
 
@@ -533,36 +554,27 @@ app.get("/api/core/version", (req, res) => {
   res.json({ version: ACTIVE_VERSION });
 });
 
-app.post("/api/core/bump", async (req, res) => {
-  const auth = req.headers.authorization;
-  if (auth !== `Bearer ${ADMIN_TOKEN}`) {
-    return res.status(403).json({ error: "unauthorized" });
-  }
+app.post("/api/core/bump", (req, res) => {
+  // auth: choose one. If you want x-admin-token:
+  const hdr = req.headers["x-admin-token"];
+  if (hdr !== ADMIN_TOKEN) return res.status(403).json({ error: "unauthorized" });
 
-  const { version } = req.body;
+  const { version } = req.body || {};
   if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) {
-    return res.status(400).json({ error: "invalid version format (use x.y.z)" });
+    return res.status(400).json({ error: "invalid version format (x.y.z)" });
   }
-
-  // numeric compare vs ACTIVE_VERSION
+  // must be higher
   const toNum = v => v.split(".").map(Number);
-  const [a1, a2, a3] = toNum(ACTIVE_VERSION);
-  const [b1, b2, b3] = toNum(version);
-  const isNewer = b1 > a1 || (b1 === a1 && (b2 > a2 || (b2 === a2 && b3 > a3)));
-  if (!isNewer) return res.status(400).json({ error: "version must be higher than current" });
+  const [a,b,c] = toNum(ACTIVE_VERSION);
+  const [x,y,z] = toNum(version);
+  const newer = x>a || (x===a && (y>b || (y===b && z>c)));
+  if (!newer) return res.status(400).json({ error: "version must be higher than current" });
 
-  try {
-    ACTIVE_VERSION = version;
-    const vfile = await writeVersionJSON(version);             // keep /core/meta in sync
-    await syncCoreVersionAcrossKeys(version);                   // update app-key records
-
-    console.log(`✅ Core bumped to ${version} and synced into keys`);
-    return res.json({ ok: true, version, meta: vfile });
-  } catch (e) {
-    console.error("core/bump sync failed:", e);
-    return res.status(500).json({ ok: false, error: "bump_sync_failed" });
-  }
+  ACTIVE_VERSION = version;
+  console.log(`✅ CORE activeVersion -> ${ACTIVE_VERSION}`);
+  res.json({ ok:true, activeVersion: ACTIVE_VERSION });
 });
+
 
 
 
