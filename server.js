@@ -118,50 +118,44 @@ async function dbPollShard(serverKey) {
   try {
     const rsp = await fetch(dbToGamePlayersUrl(serverKey), { method: 'GET' });
     if (!rsp.ok) throw new Error(`HTTP ${rsp.status}`);
-    const data = await rsp.json();
-    const players = Array.isArray(data.players) ? data.players : [];
 
-    // Keep only real DIDs, non-anon names, size > 1
-    const filtered = players.filter(p => {
+    const data = await rsp.json();
+
+    // ✅ handle both shapes: top-level array OR { players: [...] }
+    const playersRaw = Array.isArray(data) ? data
+                      : (Array.isArray(data.players) ? data.players : []);
+
+    // ✅ your spec: keep real DIDs, non-anon names, size > 2
+    const filtered = playersRaw.filter(p => {
       const did  = typeof p?.privyId === 'string' && p.privyId.startsWith('did:privy:');
       const name = (p?.name || '').trim();
-      const size = typeof p?.size === 'number' ? p.size : 0;
-      return did && size > 3 && name && !/^anonymous player$/i.test(name);
+      const size = Number(p?.size) || 0;
+      return did && name && !/^anonymous player$/i.test(name) && size > 2;
     });
 
-    // Leaderboard: require monetaryValue > 2, sort desc by monetaryValue
+    // ✅ your spec: monetaryValue > 0, sort high → low
     const top = filtered
-      .filter(p => typeof p.monetaryValue === 'number' && p.monetaryValue > 2)
-      .sort((a, b) => (b.monetaryValue || 0) - (a.monetaryValue || 0))
+      .filter(p => (Number(p?.monetaryValue) || 0) > 0)
+      .sort((a, b) => (Number(b?.monetaryValue) || 0) - (Number(a?.monetaryValue) || 0))
       .map((p, i) => ({
         privyId: p.privyId,
-        name: p.name.trim(),
-        size: p.size,
-        monetaryValue: p.monetaryValue,   // included for ordering/display
+        name: (p.name || '').trim(),
+        size: Number(p.size) || 0,
+        monetaryValue: Number(p.monetaryValue) || 0,
         rank: i + 1
       }));
 
-    dbShardCache[serverKey] = { updatedAt: Date.now(), players: [], top };
-
-    // Username ticks (persist DID + name + Region only)
-    const region = serverKey.startsWith('us-') ? 'US' : 'EU';
-    if (!dbUsernamesMem.players) dbUsernamesMem.players = {};
-    for (const pl of filtered) {
-      const did  = pl.privyId;
-      const name = pl.name.trim();
-      if (!dbUsernamesMem.players[did]) {
-        dbUsernamesMem.players[did] = { realName: null, Region: region, usernames: {} };
-      }
-      const rec = dbUsernamesMem.players[did];
-      rec.Region = region;                                 // single tag (US | EU)
-      rec.usernames[name] = (rec.usernames[name] || 0) + 1;
-    }
-
-    dbDirty = true;
+    // ✅ keep filtered (for debugging) and top (for clients)
+    dbShardCache[serverKey] = {
+      updatedAt: Date.now(),
+      players: filtered,
+      top
+    };
   } catch (e) {
     console.error('[poll]', serverKey, e?.message || e);
   }
 }
+
 
 // Poll all shards every 5s (fire-and-forget)
 setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
