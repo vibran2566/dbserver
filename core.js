@@ -17,6 +17,8 @@
   const USER_API_BASE = 'https://dbserver-8bhx.onrender.com/api/user';
   // Backend base from user API base
 const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
+  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null, LB_STATUS = null, LB_VER = null;
+
 
 function getServerKeyFromURL() {
   try {
@@ -180,16 +182,7 @@ async function fetchLeaderboardFromBackend() {
       .catch(e=>{ if (to) clearTimeout(to); resolve({ ok:false,status:0,json:null, error:String(e && e.name==='AbortError'?'timeout':'network') }); });
     });
   }
-async function fetchMapping() {
-  try {
-    const res = await fetch(`${USER_API_BASE}/mapping`, { cache: 'no-store' });
-    if (!res.ok) return { players: {} };
-    const j = await res.json().catch(() => ({}));
-    return (j && typeof j === 'object' && j.players) ? j : { players: {} };
-  } catch {
-    return { players: {} };
-  }
-}
+
   // ==============================
   // UI/STYLES (copied)
   // ==============================
@@ -344,7 +337,6 @@ async function fetchMapping() {
   // ==============================
   // Leaderboard UI
   // ==============================
-  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null;
 
   function rememberBoxPosition(box) {
     try {
@@ -367,8 +359,6 @@ async function fetchMapping() {
     box.__savePos = save;
   }
 
-  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null;
-let LB_STATUS = null, LB_VER = null; // NEW
 
 function ensureLeaderboardBox() {
   if (LB_BOX && LB_BOX.isConnected) return LB_BOX;
