@@ -5,13 +5,19 @@ import morgan from "morgan";
 import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
-import fs from "fs";
+import fs from "fs";              // sync APIs
+import fsp from "fs/promises";    // async promise APIs
 import crypto from "crypto";
 
 // === Local disk usernames store (disk-only) ================================
-const DATA_DIR = "/data";
+const DATA_DIR = process.env.DATA_DIR || "/data";
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const USER_FILE = path.join(DATA_DIR, "usernames.json");
+const __filename = fileURLToPath(import.meta.url);
+
+const app  = express();
+const jsonBody = express.json({ limit: "256kb" });
+
 
 function loadUserFile(fallback = { players: {} }) {
   try {
@@ -33,10 +39,10 @@ function saveUserFile(obj) {
   }
 }
 // Paths + app config  (MOVE THIS UP)
-const __filename = fileURLToPath(import.meta.url);
+
 const __dirname  = path.dirname(__filename);
 
-const app  = express();
+
 const PORT = process.env.PORT || 3000;
 
 const ADMIN_TOKEN          = process.env.ADMIN_TOKEN || "";
@@ -44,13 +50,17 @@ const GITHUB_TOKEN         = process.env.GITHUB_TOKEN;
 const GITHUB_REPO          = process.env.GITHUB_REPO;
 const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json";
 const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || "userkeys.json";
-const USERNAMES_FILE_PATH  = process.env.USERNAMES_FILE_PATH  || "usernames.json";
+const USERNAMES_FILE_PATH = path.join(DATA_DIR, "usernames.json");
 
 
 // --- Core version + meta helpers ---
 const CORE_PATH = path.join(__dirname, "core.js");
 let ACTIVE_VERSION = process.env.ACTIVE_VERSION || "1.1.1"; // default
 function sha256Hex(s){ return crypto.createHash('sha256').update(s,'utf8').digest('hex'); }
+// In-memory state
+let __JOIN_BUFFER__ = [];                   // events queued between flushes
+let __USERNAME_MAPPING__ = { players: {}, updatedAt: 0 };
+let __IS_FLUSHING__ = false;
 
 
 function readCoreBytes() {
@@ -166,6 +176,78 @@ setInterval(() => {
   if (saveUserFile(dbUsernamesMem)) dbDirty = false;
 }, 15000);
 
+await fsp.mkdir(DATA_DIR, { recursive: true }).catch(() => {});
+try {
+  const raw = await fsp.readFile(USERNAMES_FILE_PATH, "utf8");
+  const j = JSON.parse(raw);
+  if (j && typeof j === "object") {
+    __USERNAME_MAPPING__.players   = j.players || {};
+    __USERNAME_MAPPING__.updatedAt = j.updatedAt || Date.now();
+  }
+} catch {
+  // first boot: write an empty file
+  await fsp.writeFile(
+    USERNAMES_FILE_PATH,
+    JSON.stringify(__USERNAME_MAPPING__, null, 2)
+  );
+}
+
+// Record a single username event into in-memory map
+function recordUsername({ privyId, username, realName }) {
+  if (!privyId || !username) return;
+
+  const id  = String(privyId);
+  const nm  = String(username).slice(0, 48);
+  const rnm = realName ? String(realName).slice(0, 64) : null;
+
+  if (!__USERNAME_MAPPING__.players[id]) {
+  __USERNAME_MAPPING__.players[id] = {
+    realName: rnm || undefined,
+    usernames: {},
+    topUsernames: [],
+    firstSeen: Date.now(),
+    lastSeen: 0,
+  };
+}
+const p = __USERNAME_MAPPING__.players[id];
+
+
+  if (rnm) p.realName = rnm;                     // keep the latest realName if provided
+  p.usernames[nm] = (p.usernames[nm] || 0) + 1;
+  p.lastSeen = Date.now();
+
+  // keep a tiny precomputed top3 for the client HUD
+  p.topUsernames = Object.entries(p.usernames)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, count]) => ({ name, count }));
+}
+
+// Flush buffer to disk atomically
+async function flushUsernamesNow() {
+  if (__IS_FLUSHING__) return false;
+  __IS_FLUSHING__ = true;
+  try {
+    if (__JOIN_BUFFER__.length) {
+      for (const evt of __JOIN_BUFFER__) recordUsername(evt);
+      __JOIN_BUFFER__ = [];
+    }
+    __USERNAME_MAPPING__.updatedAt = Date.now();
+
+    const tmp = USERNAMES_FILE_PATH + ".tmp";
+    const json = JSON.stringify(__USERNAME_MAPPING__, null, 2);
+    await fsp.writeFile(tmp, json);
+    await fsp.rename(tmp, USERNAMES_FILE_PATH);   // atomic swap
+    return true;
+  } finally {
+    __IS_FLUSHING__ = false;
+  }
+}
+
+// Schedule 15s periodic flush
+setInterval(flushUsernamesNow, 15000); // not 15_000
+
+
 // === Read-only endpoints (client consumes these) ============================
 // GET /api/game/leaderboard?serverKey=us-1
 app.get('/api/game/leaderboard', (req, res) => {
@@ -263,26 +345,7 @@ setInterval(() => {
 
 // Disk-only mapping (single source of truth)
 app.get("/api/user/mapping", (req, res) => {
-  try {
-    const data = loadUserFile(); // reads /data/usernames.json
-    const out = {};
-    for (const [id, obj] of Object.entries(data.players || {})) {
-      const top = Object.entries(obj.usernames || {})
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([n, c]) => ({ name: n, count: c }));
-      out[id] = {
-        realName: obj.realName || null,
-        topUsernames: top,
-        allUsernames: obj.usernames || {},
-        Region: obj.Region || null
-      };
-    }
-    res.json({ ok: true, players: out });
-  } catch (err) {
-    console.error("mapping:", err);
-    res.status(500).json({ ok: false, error: "read_failed" });
-  }
+  res.json(__USERNAME_MAPPING__);
 });
 app.get("/api/user/core/download", (req, res) => {
   try {
@@ -297,6 +360,27 @@ app.get("/api/user/core/download", (req, res) => {
   }
 });
 
+app.post("/api/user/record", jsonBody, (req, res) => {
+  const body = req.body || {};
+  const arr = Array.isArray(body)
+    ? body
+    : Array.isArray(body.events)
+    ? body.events
+    : [body];
+
+  let queued = 0;
+  for (const e of arr) {
+    if (!e) continue;
+    const privyId = e.privyId || e.id || e.playerId;
+    const username = e.username || e.name;
+    const realName = e.realName;
+    if (privyId && username) {
+      __JOIN_BUFFER__.push({ privyId, username, realName });
+      queued++;
+    }
+  }
+  res.json({ ok: true, queued });
+});
 
 const VERSION_PATH = path.join(__dirname, "version.json");
 
@@ -313,9 +397,36 @@ app.get("/api/user/core/meta", (req, res) => {
 });
 
 
-
+app.post("/api/user/admin/flush-now", jsonBody, async (req, res) => {
+  const token = req.header("x-admin-token");
+  if (token !== (process.env.ADMIN_TOKEN || "vibran2566")) {
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  }
+  try {
+    const ok = await flushUsernamesNow();
+    res.json({ ok: true, flushed: !!ok, updatedAt: __USERNAME_MAPPING__.updatedAt });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
 // 🕐 username join queue
-
+app.get("/api/user/debug/state", async (req, res) => {
+  try {
+    let size = 0, mtime = null;
+    try {
+      const st = await fs.stat(USERNAMES_FILE_PATH);
+      size = st.size; mtime = st.mtime;
+    } catch {}
+    res.json({
+      bufferQueued: __JOIN_BUFFER__.length,
+      mappingCount: Object.keys(__USERNAME_MAPPING__.players || {}).length,
+      updatedAt: __USERNAME_MAPPING__.updatedAt || null,
+      file: { path: USERNAMES_FILE_PATH, size, mtime }
+    });
+  } catch (e) {
+    res.status(500).json({ ok:false, error:String(e) });
+  }
+});
 // flush queued joins to GitHub every 2 min 30 sec
 
 
