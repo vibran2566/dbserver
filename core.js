@@ -29,55 +29,6 @@ function getServerKeyFromURL() {
   } catch {}
   return 'us-1';
 }
-  // ---- Version helpers (core) ----
-function coreVersionSync() {
-  return typeof window.__DB_CORE_VER === "string" ? window.__DB_CORE_VER : "(unknown)";
-}
-
-async function refreshCoreVersion() {
-  try {
-    const r = await fetch(`${USER_API_BASE}/core/meta`, { cache: "no-store" });
-    if (!r.ok) throw new Error("meta " + r.status);
-    const j = await r.json();
-    const v = String(j.activeVersion || j.version || j.ver || "(unknown)");
-    window.__DB_CORE_VER = v;
-    console.log("[CORE] loaded v " + v);
-    if (LB_VER) LB_VER.textContent = "v" + v;
-  } catch (e) {
-    console.warn("[CORE] meta fetch failed:", e?.message || e);
-  }
-}
-
-
-window.__USERNAME_TRACKER__ = {
-  debug(){
-    console.log({
-      lbBoxPresent: !!(LB_BOX && LB_BOX.isConnected),
-      entries: __latestEntries__.length,
-      hasMapping: !!__latestMapping__,
-      urlLB: `${GAME_API_BASE}/api/game/leaderboard?serverKey=${encodeURIComponent(getServerKeyFromURL())}`,
-      urlMap: `${USER_API_BASE}/mapping`
-    });
-  }
-};
-
-// ---- Footer style overrides (safe to add even if base styles already exist) ----
-function ensureFooterOverrideStyles() {
-  if (document.getElementById("dbk-styles-usernames-ovr")) return;
-  const s = document.createElement("style");
-  s.id = "dbk-styles-usernames-ovr";
-  s.textContent = `
-    #username-leaderboard .ub-footer{
-      display:flex; align-items:center; justify-content:space-between;
-      margin-top:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,.12);
-      font-size:12px; opacity:.7; text-align:left;
-    }
-    #ub-status{ opacity:.88; }
-    #ub-ver{ opacity:.75; }
-  `;
-  document.head.appendChild(s);
-}
-
 // --- version helper ---
 function coreVersion() {
   try {
@@ -310,7 +261,14 @@ async function fetchMapping() {
     document.head.appendChild(s);
   }
 
- 
+  function onBodyReady(fn){
+    if (document.body) return fn();
+    const obs = new MutationObserver(() => {
+      if (document.body) { obs.disconnect(); fn(); }
+    });
+    obs.observe(document.documentElement, { childList:true, subtree:true });
+  }
+
   // ==============================
   // Username info modal (same as your script)
   // ==============================
@@ -398,12 +356,7 @@ async function fetchMapping() {
   // ==============================
   // Leaderboard UI
   // ==============================
-  var LB_BOX      = (typeof LB_BOX      !== 'undefined' ? LB_BOX      : null);
-var LB_BODY_WRAP= (typeof LB_BODY_WRAP!== 'undefined' ? LB_BODY_WRAP: null);
-var LB_FOOTER   = (typeof LB_FOOTER   !== 'undefined' ? LB_FOOTER   : null);
-var LB_STATUS   = (typeof LB_STATUS   !== 'undefined' ? LB_STATUS   : null);
-var LB_VER      = (typeof LB_VER      !== 'undefined' ? LB_VER      : null);
-
+  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null;
   function rememberBoxPosition(box) {
     try {
       const saved = JSON.parse(localStorage.getItem(LS_BOX_POS_KEY) || '{}');
@@ -425,62 +378,62 @@ var LB_VER      = (typeof LB_VER      !== 'undefined' ? LB_VER      : null);
     box.__savePos = save;
   }
 
-
-
-
-function onBodyReady(fn){
-  if (document.body) return fn();
-  const mo = new MutationObserver(() => {
-    if (document.body) { mo.disconnect(); fn(); }
-  });
-  mo.observe(document.documentElement, { childList:true, subtree:true });
-}
+  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null;
+let LB_STATUS = null, LB_VER = null; // NEW
 
 function ensureLeaderboardBox() {
   if (LB_BOX && LB_BOX.isConnected) return LB_BOX;
   injectStyles();
 
-  const make = () => {
-    LB_BOX = document.createElement('div');
-    LB_BOX.id = 'username-leaderboard';
-    LB_BOX.innerHTML = `
-      <div id="username-leaderboard-header">
-        <div class="ub-top-drag"></div>
-        TRUE LEADERBOARD
-      </div>
-      <div id="ub-body"><div class="ub-row"><div class="ub-left"><div class="ub-rank">-</div><div class="ub-name">Loading…</div></div></div></div>
-      <div class="ub-footer" id="ub-footer"><span id="ub-status">Starting…</span><span id="ub-ver" style="float:right"></span></div>
-    `;
+  LB_BOX = document.createElement('div');
+  LB_BOX.id = 'username-leaderboard';
+  LB_BOX.innerHTML = `
+  <div id="username-leaderboard-header">
+    <div class="ub-top-drag"></div>
+    TRUE LEADERBOARD
+  </div>
+  <div id="ub-body"></div>
+  <div class="ub-footer" id="ub-footer">
+    <span id="ub-status"></span>
+    <span id="ub-ver"></span>
+  </div>
+`;
+
+
+  if (document.body) {
     document.body.appendChild(LB_BOX);
-    LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
-    LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
-LB_VER    = LB_BOX.querySelector('#ub-ver');
-ensureFooterOverrideStyles();
-// initial paint
-if (LB_STATUS) LB_STATUS.textContent = "Not in Game";
-if (LB_VER)    LB_VER.textContent = "v" + coreVersionSync();
+  } else {
+    window.addEventListener('DOMContentLoaded', () => document.body.appendChild(LB_BOX), { once: true });
+  }
 
-    const pill = LB_BOX.querySelector('.ub-top-drag');
-    let dragging=false,sx=0,sy=0,ox=16,oy=16;
-    function down(e){ dragging=true; const p=e.touches?e.touches[0]:e; sx=p.clientX; sy=p.clientY; const r=LB_BOX.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault(); }
-    function move(e){ if(!dragging) return; const p=e.touches?e.touches[0]:e; const nx=Math.max(0,Math.min(window.innerWidth-40,  ox+(p.clientX-sx))); const ny=Math.max(0,Math.min(window.innerHeight-40, oy+(p.clientY-sy))); LB_BOX.style.left=nx+'px'; LB_BOX.style.top=ny+'px'; }
-    function up(){ dragging=false; if (LB_BOX && LB_BOX.__savePos) LB_BOX.__savePos(); }
-    pill.addEventListener('mousedown',down,{passive:false});
-    window.addEventListener('mousemove',move,{passive:false});
-    window.addEventListener('mouseup',up,{passive:true});
-    pill.addEventListener('touchstart',down,{passive:false});
-    window.addEventListener('touchmove',move,{passive:false});
-    window.addEventListener('touchend',up,{passive:true});
+ LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
+LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
+LB_STATUS    = LB_BOX.querySelector('#ub-status');
+LB_VER       = LB_BOX.querySelector('#ub-ver');
 
-    rememberBoxPosition(LB_BOX);
-    console.info('[CORE] LB box created');
-  };
+const v = 'v' + coreVersion();
+if (LB_VER) LB_VER.textContent = v;
 
-  if (document.body) make(); else onBodyReady(make);
+// one-time console marker so you can see the update took effect
+console.log('[DB CORE] loaded', v, 'from', USER_API_BASE);
+LB_BOX.dataset.core = v; // optional: visible in Elements panel
+
+
+  const pill = LB_BOX.querySelector('.ub-top-drag');
+  let dragging=false,sx=0,sy=0,ox=16,oy=16;
+  function down(e){ dragging=true; const p=e.touches?e.touches[0]:e; sx=p.clientX; sy=p.clientY; const r=LB_BOX.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault(); }
+  function move(e){ if(!dragging) return; const p=e.touches?e.touches[0]:e; const nx=Math.max(0,Math.min(window.innerWidth-40,  ox+(p.clientX-sx))); const ny=Math.max(0,Math.min(window.innerHeight-40, oy+(p.clientY-sy))); LB_BOX.style.left=nx+'px'; LB_BOX.style.top=ny+'px'; }
+  function up(){ dragging=false; if (LB_BOX && LB_BOX.__savePos) LB_BOX.__savePos(); }
+  pill.addEventListener('mousedown',down,{passive:false});
+  window.addEventListener('mousemove',move,{passive:false});
+  window.addEventListener('mouseup',up,{passive:true});
+  pill.addEventListener('touchstart',down,{passive:false});
+  window.addEventListener('touchmove',move,{passive:false});
+  window.addEventListener('touchend',up,{passive:true});
+
+  rememberBoxPosition(LB_BOX);
   return LB_BOX;
 }
-
-
 
 
   function renderLeaderboard(playersSorted, mapping) {
@@ -546,12 +499,11 @@ if (LB_VER)    LB_VER.textContent    = 'v' + coreVersion(); // keep fresh
       row.appendChild(left); row.appendChild(right); LB_BODY_WRAP.appendChild(row);
     });
 
-   if (LB_STATUS) {
-  const n = Array.isArray(playersSorted) ? playersSorted.length : 0;
-  LB_STATUS.textContent = `${n} player${n===1 ? "" : "s"} online`;
-}
-if (LB_VER) LB_VER.textContent = "v" + coreVersionSync();
-
+    if (LB_STATUS) LB_STATUS.textContent =
+  `${playersSorted.length} player${playersSorted.length===1?"":"s"} online`;
+    if (LB_STATUS) LB_STATUS.textContent =
+  `${playersSorted.length} player${playersSorted.length===1?"":"s"} online`;
+if (LB_VER) LB_VER.textContent = 'v' + coreVersion();  // ensure it’s always shown
 
   }
 
@@ -565,16 +517,13 @@ let __latestMapping__ = null;
 async function pollAndRenderLB() {
   try {
     const entries = await fetchLeaderboardFromBackend();
-    __latestEntries__ = Array.isArray(entries) ? entries : [];
+    __latestEntries__ = entries;
     ensureLeaderboardBox();
-    renderLeaderboard(__latestEntries__, __latestMapping__ || { players:{} });
-    if (LB_FOOTER) {
-      const s = document.getElementById('ub-status');
-      if (s) s.textContent = `${__latestEntries__.length} player${__latestEntries__.length===1?'':'s'} online`;
-    }
-    console.info('[CORE] LB fetch ok, entries=', __latestEntries__.length);
+    const mapping = __latestMapping__ || (await fetchMapping().catch(()=>null));
+    if (mapping) __latestMapping__ = mapping;
+    renderLeaderboard(__latestEntries__, __latestMapping__ || { players: {} });
   } catch (err) {
-    console.warn('[CORE] LB poll failed:', err);
+    console.warn('LB poll failed:', err);
   }
 }
 
@@ -584,27 +533,21 @@ async function pollAndRenderMapping() {
     __latestMapping__ = mapping;
     ensureLeaderboardBox();
     renderLeaderboard(__latestEntries__, __latestMapping__);
-    const v = (window.__DB_CORE_VERSION__ || 'unknown');
-    const ver = document.getElementById('ub-ver');
-    if (ver) ver.textContent = `v${v}`;
-    console.info('[CORE] mapping fetch ok');
   } catch (err) {
-    console.warn('[CORE] mapping poll failed:', err);
+    console.warn('Mapping poll failed:', err);
   }
 }
 
-// start timers
+// Timers (replace startPolling/stopPolling bodies)
 let lbTimer = null, mapTimer = null;
 function startPolling() {
-  ensureLeaderboardBox();
   if (lbTimer) clearInterval(lbTimer);
   if (mapTimer) clearInterval(mapTimer);
-  lbTimer  = setInterval(pollAndRenderLB,   5000);
-  mapTimer = setInterval(pollAndRenderMapping, 7000);
+  lbTimer  = setInterval(pollAndRenderLB, 5000);  // 5 s
+  mapTimer = setInterval(pollAndRenderMapping, 7000); // 7 s
   pollAndRenderLB();
   pollAndRenderMapping();
 }
-
 function stopPolling() {
   if (lbTimer)  { clearInterval(lbTimer);  lbTimer  = null; }
   if (mapTimer) { clearInterval(mapTimer); mapTimer = null; }
@@ -670,14 +613,16 @@ function stopPolling() {
   // Start immediately (no key UI in core)
   // ==============================
   function startAll() {
-  ensureLeaderboardBox();
-  refreshCoreVersion();          // <— add this
-  startPolling();
-  window.__USERNAME_TRACKER__ = {
-    stop() { stopPolling(); if (LB_BOX?.parentNode) LB_BOX.parentNode.removeChild(LB_BOX); LB_BOX = null; }
-  };
-}
-
+    ensureLeaderboardBox();
+    startPolling();
+    window.__USERNAME_TRACKER__ = {
+      stop() {
+        stopPolling();
+        if (LB_BOX && LB_BOX.parentNode) LB_BOX.parentNode.removeChild(LB_BOX);
+        LB_BOX = null;
+      }
+    };
+  }
 
   startAll();
 
