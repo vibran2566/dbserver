@@ -48,13 +48,7 @@ async function refreshCoreVersion() {
   }
 }
 
-async function fetchMapping() {
-  const url = `${USER_API_BASE}/mapping`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error('mapping ' + res.status);
-  const j = await res.json();            // { ok:true, players:{...} }
-  return j && typeof j === 'object' ? j : { players: {} };
-}
+
 window.__USERNAME_TRACKER__ = {
   debug(){
     console.log({
@@ -316,14 +310,7 @@ async function fetchMapping() {
     document.head.appendChild(s);
   }
 
-  function onBodyReady(fn){
-    if (document.body) return fn();
-    const obs = new MutationObserver(() => {
-      if (document.body) { obs.disconnect(); fn(); }
-    });
-    obs.observe(document.documentElement, { childList:true, subtree:true });
-  }
-
+ 
   // ==============================
   // Username info modal (same as your script)
   // ==============================
@@ -411,9 +398,12 @@ async function fetchMapping() {
   // ==============================
   // Leaderboard UI
   // ==============================
-  var LB_BOX = (typeof LB_BOX !== 'undefined' ? LB_BOX : null);
-var LB_BODY_WRAP = (typeof LB_BODY_WRAP !== 'undefined' ? LB_BODY_WRAP : null);
-var LB_FOOTER = (typeof LB_FOOTER !== 'undefined' ? LB_FOOTER : null);
+  var LB_BOX      = (typeof LB_BOX      !== 'undefined' ? LB_BOX      : null);
+var LB_BODY_WRAP= (typeof LB_BODY_WRAP!== 'undefined' ? LB_BODY_WRAP: null);
+var LB_FOOTER   = (typeof LB_FOOTER   !== 'undefined' ? LB_FOOTER   : null);
+var LB_STATUS   = (typeof LB_STATUS   !== 'undefined' ? LB_STATUS   : null);
+var LB_VER      = (typeof LB_VER      !== 'undefined' ? LB_VER      : null);
+
   function rememberBoxPosition(box) {
     try {
       const saved = JSON.parse(localStorage.getItem(LS_BOX_POS_KEY) || '{}');
@@ -435,7 +425,7 @@ var LB_FOOTER = (typeof LB_FOOTER !== 'undefined' ? LB_FOOTER : null);
     box.__savePos = save;
   }
 
-  let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null;
+
 let LB_STATUS = null, LB_VER = null; // NEW
 
 function onBodyReady(fn){
