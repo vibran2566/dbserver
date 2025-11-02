@@ -46,6 +46,9 @@ const USERNAMES_FILE_PATH  = process.env.USERNAMES_FILE_PATH  || "usernames.json
 // --- Core version + meta helpers ---
 const CORE_PATH = path.join(__dirname, "core.js");
 let ACTIVE_VERSION = process.env.ACTIVE_VERSION || "1.1.1"; // default
+import crypto from 'node:crypto';
+function sha256Hex(s){ return crypto.createHash('sha256').update(s,'utf8').digest('hex'); }
+
 
 function readCoreBytes() {
   const code = fs.readFileSync(CORE_PATH, "utf8");
