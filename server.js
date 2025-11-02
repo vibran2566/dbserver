@@ -54,11 +54,6 @@ function readCoreBytes() {
   const code = fs.readFileSync(CORE_PATH, "utf8");
   return code;
 }
-function sha256Hex(bufStr) {
-  const crypto = await import('node:crypto');
-  return crypto.createHash('sha256').update(bufStr, 'utf8').digest('hex');
-}
-
 
 app.use(express.static(__dirname));
 app.use(morgan("tiny"));
