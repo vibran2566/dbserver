@@ -361,7 +361,11 @@ async function showUserKeys() {
 }
 
 async function showUserList() {
-  const d = await fetchJSON(`${API}/api/user/mapping`);
+  const d = await fetchJSON(`${API}/api/user/mapping`); // or `${API}/api/game/usernames?serverKey=us-1`
+  const players =
+    (d && d.players) ||
+    (d && d.usernames && d.usernames.players) || {};
+
   let html = `
     <div class="panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -371,16 +375,26 @@ async function showUserList() {
         </h3>
       </div>
   `;
-  for (const [id, p] of Object.entries(d.players || {})) {
+
+  for (const [id, p] of Object.entries(players)) {
+    const top = Array.isArray(p.topUsernames) && p.topUsernames.length
+      ? p.topUsernames
+      : Object.entries(p.usernames || {})
+          .sort((a,b)=>b[1]-a[1])
+          .slice(0,3)
+          .map(([name,count])=>({ name, count }));
+
     html += `
       <div class="keycard">
         <b>${p.realName || "(unverified)"} — ${id}</b><br>
-        <i>Top 3:</i> ${p.topUsernames.map(t => `${t.name} (${t.count})`).join(", ")}
+        <i>Top 3:</i> ${top.length ? top.map(t => `${t.name} (${t.count})`).join(", ") : "—"}
       </div>`;
   }
+
   html += `</div>`;
   show(html);
 }
+
 
 function showSizeCmds(){
   show(cmdsBlock("Size Commands",[
