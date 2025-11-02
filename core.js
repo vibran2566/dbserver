@@ -225,7 +225,19 @@ async function fetchMapping() {
       .ub-medal{ font-size:12px; }
       .ub-name{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
       .ub-hint{ color:#4ade80; font-weight:600; font-size:12px; margin-left:8px; flex-shrink:0; text-shadow:0 1px 2px rgba(0,0,0,.8); }
-      .ub-footer{ margin-top:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,.12); font-size:12px; text-align:left; opacity:.7; }
+      .ub-footer{
+  margin-top:8px;
+  padding-top:6px;
+  border-top:1px solid rgba(255,255,255,.12);
+  font-size:12px;
+  display:flex;                 /* NEW */
+  align-items:center;           /* NEW */
+  justify-content:space-between;/* NEW */
+  opacity:.7;
+}
+#ub-status{ opacity:.88; }
+#ub-ver{ opacity:.75; }
+
 #ub-status{ opacity:.88; }
 #ub-ver{ opacity:.75; }
       .ub-top3-wrap{ position:relative; }
@@ -345,7 +357,6 @@ async function fetchMapping() {
   // Leaderboard UI
   // ==============================
   let LB_BOX = null, LB_BODY_WRAP = null, LB_FOOTER = null;
-
   function rememberBoxPosition(box) {
     try {
       const saved = JSON.parse(localStorage.getItem(LS_BOX_POS_KEY) || '{}');
@@ -377,16 +388,17 @@ function ensureLeaderboardBox() {
   LB_BOX = document.createElement('div');
   LB_BOX.id = 'username-leaderboard';
   LB_BOX.innerHTML = `
-    <div id="username-leaderboard-header">
-      <div class="ub-top-drag"></div>
-      TRUE LEADERBOARD
-    </div>
-    <div id="ub-body"></div>
-    <div class="ub-footer" id="ub-footer">
-      <span id="ub-status"></span>
-      <span id="ub-ver"></span>
-    </div>
-  `;
+  <div id="username-leaderboard-header">
+    <div class="ub-top-drag"></div>
+    TRUE LEADERBOARD
+  </div>
+  <div id="ub-body"></div>
+  <div class="ub-footer" id="ub-footer">
+    <span id="ub-status"></span>
+    <span id="ub-ver"></span>
+  </div>
+`;
+
 
   if (document.body) {
     document.body.appendChild(LB_BOX);
@@ -394,11 +406,18 @@ function ensureLeaderboardBox() {
     window.addEventListener('DOMContentLoaded', () => document.body.appendChild(LB_BOX), { once: true });
   }
 
-  LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
-  LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
-  LB_STATUS    = LB_BOX.querySelector('#ub-status');
-  LB_VER       = LB_BOX.querySelector('#ub-ver');
-  if (LB_VER) LB_VER.textContent = 'v' + coreVersion();
+ LB_BODY_WRAP = LB_BOX.querySelector('#ub-body');
+LB_FOOTER    = LB_BOX.querySelector('#ub-footer');
+LB_STATUS    = LB_BOX.querySelector('#ub-status');
+LB_VER       = LB_BOX.querySelector('#ub-ver');
+
+const v = 'v' + coreVersion();
+if (LB_VER) LB_VER.textContent = v;
+
+// one-time console marker so you can see the update took effect
+console.log('[DB CORE] loaded', v, 'from', USER_API_BASE);
+LB_BOX.dataset.core = v; // optional: visible in Elements panel
+
 
   const pill = LB_BOX.querySelector('.ub-top-drag');
   let dragging=false,sx=0,sy=0,ox=16,oy=16;
@@ -482,6 +501,10 @@ if (LB_VER)    LB_VER.textContent    = 'v' + coreVersion(); // keep fresh
 
     if (LB_STATUS) LB_STATUS.textContent =
   `${playersSorted.length} player${playersSorted.length===1?"":"s"} online`;
+    if (LB_STATUS) LB_STATUS.textContent =
+  `${playersSorted.length} player${playersSorted.length===1?"":"s"} online`;
+if (LB_VER) LB_VER.textContent = 'v' + coreVersion();  // ensure it’s always shown
+
   }
 
   // ==============================
