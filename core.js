@@ -361,6 +361,7 @@ setInterval(async () => {
       <div class="ub-footer"><span id="ub-status">Starting…</span><span id="ub-ver">dev</span></div>
     `;
     document.body.appendChild(LB_BOX);
+    restoreLeaderboardPos();
     LB_BODY = LB_BOX.querySelector('#ub-body');
     LB_STATUS = LB_BOX.querySelector('#ub-status');
     LB_VER = LB_BOX.querySelector('#ub-ver');
