@@ -370,7 +370,7 @@ setInterval(async () => {
     let dragging=false,sx=0,sy=0,ox=16,oy=16;
     function down(e){ dragging=true; const p=e.touches?e.touches[0]:e; sx=p.clientX; sy=p.clientY; const r=LB_BOX.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault(); }
     function move(e){ if(!dragging) return; const p=e.touches?e.touches[0]:e; const nx=Math.max(0,Math.min(innerWidth-40,  ox+(p.clientX-sx))); const ny=Math.max(0,Math.min(innerHeight-40, oy+(p.clientY-sy))); LB_BOX.style.left=nx+'px'; LB_BOX.style.top=ny+'px'; }
-    function up(){ dragging=false; }
+    function up(){ dragging=false; saveLeaderboardPos(); }
     pill.addEventListener('mousedown',down,{passive:false});
     addEventListener('mousemove',move,{passive:false});
     addEventListener('mouseup',up,{passive:true});
@@ -388,6 +388,18 @@ setInterval(async () => {
   const right = document.createElement('div'); right.className = 'ub-hint'; right.textContent = '';
   row.appendChild(right);
   return row;
+}
+function restoreLeaderboardPos(){
+  try{
+    const saved = JSON.parse(localStorage.getItem("leaderboard_box_pos") || "{}");
+    if (saved.left && saved.top && LB_BOX)
+      Object.assign(LB_BOX.style, { left:saved.left, top:saved.top });
+  } catch {}
+}
+function saveLeaderboardPos(){
+  if (!LB_BOX) return;
+  const snapshot = { left: LB_BOX.style.left, top: LB_BOX.style.top };
+  localStorage.setItem("leaderboard_box_pos", JSON.stringify(snapshot));
 }
 
 
