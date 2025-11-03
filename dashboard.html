@@ -361,7 +361,7 @@ async function showUserKeys() {
 }
 
 async function showUserList() {
-  const d = await fetchJSON(`${API}/api/user/mapping`); // or `${API}/api/game/usernames?serverKey=us-1`
+   const d = await fetchJSON(`${API}/api/user/mapping`); // or swap to /api/game/usernames?serverKey=us-1
   const players =
     (d && d.players) ||
     (d && d.usernames && d.usernames.players) || {};
@@ -377,6 +377,7 @@ async function showUserList() {
   `;
 
   for (const [id, p] of Object.entries(players)) {
+    // Top 3 usernames
     const top = Array.isArray(p.topUsernames) && p.topUsernames.length
       ? p.topUsernames
       : Object.entries(p.usernames || {})
@@ -384,11 +385,22 @@ async function showUserList() {
           .slice(0,3)
           .map(([name,count])=>({ name, count }));
 
+    // Top region + its count
+    const rc = (p.regionCounts && typeof p.regionCounts === 'object') ? p.regionCounts : {};
+    let tr = p.topRegion;
+    if (!tr) {
+      const best = Object.entries(rc).sort((a,b)=> (b[1]||0) - (a[1]||0))[0];
+      tr = best ? best[0] : null;
+    }
+    const trCount = tr && typeof rc[tr] === 'number' ? rc[tr] : (tr ? 0 : null);
+
     html += `
       <div class="keycard">
         <b>${p.realName || "(unverified)"} — ${id}</b><br>
-        <i>Top 3:</i> ${top.length ? top.map(t => `${t.name} (${t.count})`).join(", ") : "—"}
-      </div>`;
+        Top 3: ${top.length ? top.map(t => `${t.name} (${t.count})`).join(", ") : "—"}<br>
+        Top Region: ${tr ? `${tr} (${trCount})` : "—"}
+      </div>
+    `;
   }
 
   html += `</div>`;
