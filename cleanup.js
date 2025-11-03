@@ -1,80 +1,86 @@
 #!/usr/bin/env node
 /**
- * cleanup-fixed.js
- * - Removes any player whose privyId key starts with "pending:"
- * - Removes all "Anonymous Player" usernames (case-insensitive) from each player
- * - Recomputes topUsernames from the remaining usernames
- * - Touches updatedAt and prints a summary
- *
- * Usage: node cleanup-fixed.js [/custom/path/to/usernames.json]
+ * cleanup-fixed.createRequire.js (ESM env that still uses require)
+ * Works when package.json has "type": "module".
+ * Usage: node cleanup-fixed.createRequire.js [/custom/path/to/usernames.json]
  */
-import fs from 'node:fs';
-// ...rest of your code unchanged, just using `fs` as imported
+import { createRequire } from 'node:module';
+import process from 'node:process';
+const require = createRequire(import.meta.url);
 
-const fs = require("fs");
-const path = require("path");
+const fs = require('fs');
 
-
-const USER_FILE = process.argv[2] || process.env.USER_FILE || "/data/usernames.json";
+const USER_FILE = process.argv[2] || process.env.USER_FILE || '/data/usernames.json';
 
 function loadJson(p) {
   if (!fs.existsSync(p)) return null;
   try {
-    const raw = fs.readFileSync(p, "utf8");
+    const raw = fs.readFileSync(p, 'utf8');
     return JSON.parse(raw);
   } catch (e) {
-    console.error("❌ Failed to parse JSON:", e && e.message ? e.message : e);
+    console.error('❌ Failed to parse JSON:', e && e.message ? e.message : e);
     return null;
   }
 }
 
 function saveJson(p, obj) {
   try {
-    const tmp = p + ".tmp";
+    const tmp = p + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(obj, null, 2));
     fs.renameSync(tmp, p);
     return true;
   } catch (e) {
-    console.error("❌ Failed to write JSON:", e && e.message ? e.message : e);
+    console.error('❌ Failed to write JSON:', e && e.message ? e.message : e);
     return false;
   }
 }
 
 function recomputeTopUsernames(usernamesObj) {
   const entries = Object.entries(usernamesObj || {})
-    .filter(([k, v]) => typeof k === "string" && typeof v === "number" && v > 0)
+    .filter(([k, v]) => typeof k === 'string' && typeof v === 'number' && v > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
   return entries.map(([name, count]) => ({ name, count }));
 }
 
 (function main() {
-  console.log("🧹 Cleaning:", USER_FILE);
+  console.log('🧹 Cleaning:', USER_FILE);
   const data = loadJson(USER_FILE);
-  if (!data || typeof data !== "object") {
-    console.log("No usernames.json found or invalid JSON. Exiting.");
+  if (!data || typeof data !== 'object') {
+    console.log('No usernames.json found or invalid JSON. Exiting.');
     process.exit(0);
   }
 
-  const players = (data.players && typeof data.players === "object") ? data.players : {};
+  const players = (data.players && typeof data.players === 'object') ? data.players : {};
   const anonRE = /^anonymous\s+player$/i;
 
   let removedPending = 0;
   let removedAnonNames = 0;
   let prunedEmptyPlayers = 0;
+  let removedRegionFlags = 0;
 
   // 1) Remove any "pending:*" players entirely
   for (const did of Object.keys(players)) {
-    if (typeof did === "string" && did.startsWith("pending:")) {
+    if (typeof did === 'string' && did.startsWith('pending:')) {
       delete players[did];
       removedPending++;
     }
   }
 
-  // 2) Remove Anonymous Player usernames, recompute topUsernames
+  // 2) Remove legacy Region flag (NOT topRegion)
+  //    Keep regionCounts and topRegion intact
   for (const [did, player] of Object.entries(players)) {
-    if (!player || typeof player !== "object") continue;
-    const u = player.usernames && typeof player.usernames === "object" ? player.usernames : {};
+    if (!player || typeof player !== 'object') continue;
+    if (Object.prototype.hasOwnProperty.call(player, 'Region')) {
+      delete player.Region;
+      removedRegionFlags++;
+    }
+  }
+
+  // 3) Remove Anonymous Player usernames, recompute topUsernames
+  for (const [did, player] of Object.entries(players)) {
+    if (!player || typeof player !== 'object') continue;
+    const u = player.usernames && typeof player.usernames === 'object' ? player.usernames : {};
 
     // delete all keys that equal "Anonymous Player" (case-insensitive)
     for (const name of Object.keys(u)) {
@@ -97,16 +103,17 @@ function recomputeTopUsernames(usernamesObj) {
     }
   }
 
-  // 3) bump updatedAt
+  // 4) bump updatedAt
   data.players = players;
   data.updatedAt = Date.now();
 
-  // 4) Save atomically
+  // 5) Save atomically
   if (saveJson(USER_FILE, data)) {
-    console.log(`✅ Done.`);
+    console.log('✅ Done.');
     console.log(`   Removed pending players: ${removedPending}`);
     console.log(`   Removed "Anonymous Player" usernames: ${removedAnonNames}`);
     console.log(`   Pruned empty player records: ${prunedEmptyPlayers}`);
+    console.log(`   Removed legacy Region flags: ${removedRegionFlags}`);
   } else {
     process.exit(1);
   }
