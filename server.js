@@ -6,7 +6,7 @@ import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";              // sync APIs
-import fsp from "fs/promises";    // async promise APIs
+import { promises as fsp } from "fs";
 import crypto from "crypto";
 
 // === Local disk usernames store (disk-only) ================================
@@ -159,14 +159,17 @@ for (const p of filtered) {
   const id   = p.privyId;
   const name = (p.name || '').trim();
   if (id && name && !/^anonymous player$/i.test(name)) {
-    // update in-memory immediately (instant icons)
-    recordUsername({ privyId: id, username: name });
+    const regionLabel = dbRegion(serverKey); // "US" or "EU"
+    recordUsername({ privyId: id, username: name, region: regionLabel });
     dbDirty = true;
-
-    // optional: also enqueue for the 15s disk flush path
-    __JOIN_BUFFER__.push({ privyId: id, username: name });
+    __JOIN_BUFFER__.push({ privyId: id, username: name, region: regionLabel });
   }
 }
+
+await fsp.writeFile(
+  USERNAMES_FILE_PATH,
+  JSON.stringify(__USERNAME_MAPPING__, null, 2)
+);
 
     // ✅ keep filtered (for debugging) and top (for clients)
     dbShardCache[serverKey] = {
@@ -204,9 +207,16 @@ try {
     JSON.stringify(__USERNAME_MAPPING__, null, 2)
   );
 }
+// Backfill region fields for old records (idempotent)
+for (const p of Object.values(__USERNAME_MAPPING__.players || {})) {
+  if (!p.regionCounts) p.regionCounts = { US: 0, EU: 0 };
+  const us = Number(p.regionCounts.US || 0);
+  const eu = Number(p.regionCounts.EU || 0);
+  p.topRegion = (us >= eu) ? 'US' : 'EU';
+}
 
 // Record a single username event into in-memory map
-function recordUsername({ privyId, username, realName }) {
+function recordUsername({ privyId, username, realName, region }) {
   if (!privyId || !username) return;
 
   const id  = String(privyId);
@@ -214,27 +224,43 @@ function recordUsername({ privyId, username, realName }) {
   const rnm = realName ? String(realName).slice(0, 64) : null;
 
   if (!__USERNAME_MAPPING__.players[id]) {
-  __USERNAME_MAPPING__.players[id] = {
-    realName: rnm || undefined,
-    usernames: {},
-    topUsernames: [],
-    firstSeen: Date.now(),
-    lastSeen: 0,
-  };
-}
-const p = __USERNAME_MAPPING__.players[id];
+    __USERNAME_MAPPING__.players[id] = {
+      realName: rnm || undefined,
+      usernames: {},
+      topUsernames: [],
+      regionCounts: { US: 0, EU: 0 }, // NEW
+      topRegion: null,                // NEW
+      firstSeen: Date.now(),
+      lastSeen: 0,
+    };
+  }
+  const p = __USERNAME_MAPPING__.players[id];
 
+  if (rnm) p.realName = rnm;
 
-  if (rnm) p.realName = rnm;                     // keep the latest realName if provided
+  // username counts
   p.usernames[nm] = (p.usernames[nm] || 0) + 1;
-  p.lastSeen = Date.now();
 
-  // keep a tiny precomputed top3 for the client HUD
+  // region counts (only US/EU accepted)
+  if (!p.regionCounts) p.regionCounts = { US: 0, EU: 0 };
+  if (region === 'US' || region === 'EU') {
+    p.regionCounts[region] = (p.regionCounts[region] || 0) + 1;
+  }
+
+  // compute topRegion on every write (ties → US by default)
+  const us = Number(p.regionCounts.US || 0);
+  const eu = Number(p.regionCounts.EU || 0);
+  p.topRegion = (us >= eu) ? 'US' : 'EU';
+
+  // top 3 usernames cache
   p.topUsernames = Object.entries(p.usernames)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
     .map(([name, count]) => ({ name, count }));
+
+  p.lastSeen = Date.now();
 }
+
 
 // Flush buffer to disk atomically
 async function flushUsernamesNow() {
