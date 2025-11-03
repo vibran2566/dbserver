@@ -61,6 +61,12 @@
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
       "version": "1.1.1"
+    },
+    {
+      "key": "KEY-151Q00S7",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-11-03T19:02:17.386Z"
     }
   ]
 }
