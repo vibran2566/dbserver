@@ -5,10 +5,16 @@
   let LB_BOX = null, LB_BODY = null, LB_STATUS = null, LB_VER = null;
   let TICK = null;
   // add this just after LB_* and TICK are declared
+// Version label comes from the bootstrapper's cache
 const UI_VER = (() => {
-  try { return 'v' + (GM_info?.script?.version?.replace(/^v?/, '') || '1.0.0'); }
-  catch { return 'v1.0.0'; }
+  try {
+    const v = localStorage.getItem('db_core_ver_v1');
+    if (v && /^\d+\.\d+\.\d+$/.test(v)) return 'v' + v;
+  } catch {}
+  try { return 'v' + (GM_info?.script?.version?.replace(/^v?/, '') || '0.0.0'); }
+  catch { return 'v0.0.0'; }
 })();
+
 
     const USER_API_BASE = 'https://dbserver-8bhx.onrender.com/api/user';
 const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
