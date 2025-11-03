@@ -8,9 +8,12 @@
  *
  * Usage: node cleanup-fixed.js [/custom/path/to/usernames.json]
  */
+import fs from 'node:fs';
+// ...rest of your code unchanged, just using `fs` as imported
 
 const fs = require("fs");
 const path = require("path");
+
 
 const USER_FILE = process.argv[2] || process.env.USER_FILE || "/data/usernames.json";
 
