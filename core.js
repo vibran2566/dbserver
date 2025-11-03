@@ -4,6 +4,12 @@
 
   let LB_BOX = null, LB_BODY = null, LB_STATUS = null, LB_VER = null;
   let TICK = null;
+  // add this just after LB_* and TICK are declared
+const UI_VER = (() => {
+  try { return 'v' + (GM_info?.script?.version?.replace(/^v?/, '') || '1.0.0'); }
+  catch { return 'v1.0.0'; }
+})();
+
     const USER_API_BASE = 'https://dbserver-8bhx.onrender.com/api/user';
 const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
     let __MAP__ = { players: {} };
@@ -352,6 +358,7 @@ setInterval(async () => {
     LB_BODY = LB_BOX.querySelector('#ub-body');
     LB_STATUS = LB_BOX.querySelector('#ub-status');
     LB_VER = LB_BOX.querySelector('#ub-ver');
+    if (LB_VER) LB_VER.textContent = UI_VER;
 
     const pill = LB_BOX.querySelector('.ub-top-drag');
     let dragging=false,sx=0,sy=0,ox=16,oy=16;
@@ -388,7 +395,7 @@ function render(players, mapping = __MAP__) {
   if (notInGame) {
     LB_BODY.appendChild(row('No lobby found', '-'));
     if (LB_STATUS) LB_STATUS.textContent = 'Not in Game';
-    if (LB_VER)    LB_VER.textContent    = 'dev';
+    if (LB_VER) LB_VER.textContent = UI_VER;
     return;
   }
 
@@ -400,7 +407,7 @@ function render(players, mapping = __MAP__) {
   if (list.length === 0) {
     LB_BODY.appendChild(row('No players found', '-'));
     if (LB_STATUS) LB_STATUS.textContent = '0 players online';
-    if (LB_VER)    LB_VER.textContent    = 'dev';
+    if (LB_VER) LB_VER.textContent = UI_VER;
     return;
   }
 
@@ -439,7 +446,7 @@ if (info && Array.isArray(info.topUsernames) && info.topUsernames.length){
   });
 
   if (LB_STATUS) LB_STATUS.textContent = `${list.length} player${list.length===1?'':'s'} online`;
-  if (LB_VER)    LB_VER.textContent    = 'dev';
+  if (LB_VER) LB_VER.textContent = UI_VER;
 }
 
 async function tick() {
