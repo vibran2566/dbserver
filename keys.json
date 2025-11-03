@@ -82,14 +82,16 @@
     },
     {
       "key": "KEY-PPMQS9P2",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-11-01T22:07:20.362Z",
       "lastUsedAt": "2025-11-03T14:23:00.345Z",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
       "version": "1.1.1",
-      "note": "svn"
+      "note": "svn",
+      "usedAt": "2025-11-03T16:35:08.641Z",
+      "boundProof": "bb4383396f61453fd5d5e75f1b26cc8d362e3f25ea4fcbd2d6c728d2af8db458"
     },
     {
       "key": "KEY-OF3P9P4N",
