@@ -70,6 +70,12 @@
       "usedAt": "2025-11-03T19:02:32.550Z",
       "boundProof": "01b7d43cb843279ddbb9810826153429951d679cc38d08f3b7b588843c731273",
       "lastUsedAt": "2025-11-03T19:41:45.519Z"
+    },
+    {
+      "key": "KEY-SCASNFRI",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-11-04T01:34:38.277Z"
     }
   ]
 }
