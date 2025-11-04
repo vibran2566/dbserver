@@ -2,13 +2,15 @@
   "keys": [
     {
       "key": "KEY-9ZK32H9T",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T13:06:45.933Z",
       "note": "Quillpie",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
-      "version": "1.1.1"
+      "version": "1.1.1",
+      "usedAt": "2025-11-04T01:34:42.480Z",
+      "boundProof": "228133af13d4b04bfca69bb370729ab59cdde3ff6ba8d2aa007943dfb4f37cc7"
     },
     {
       "key": "KEY-8JD9IVNS",
