@@ -83,9 +83,11 @@
     },
     {
       "key": "KEY-2KI4JJCB",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-11-05T01:26:53.763Z"
+      "createdAt": "2025-11-05T01:26:53.763Z",
+      "usedAt": "2025-11-05T01:26:57.908Z",
+      "boundProof": "58301f70518bf48a893b23cbca5fe941289792981a097223d6224a1ae62b9b5c"
     }
   ]
 }
