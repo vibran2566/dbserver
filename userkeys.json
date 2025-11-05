@@ -80,6 +80,12 @@
       "boundProof": "e4d94d131fee3b1b029850ebb4cfde7707c180778da5324a2b2928c046b00b03",
       "note": "Quillpie",
       "lastUsedAt": "2025-11-05T20:22:11.227Z"
+    },
+    {
+      "key": "KEY-M5IVMA67",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-11-05T20:26:08.862Z"
     }
   ]
 }
