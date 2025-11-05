@@ -85,7 +85,8 @@
       "key": "KEY-M5IVMA67",
       "used": false,
       "revoked": false,
-      "createdAt": "2025-11-05T20:26:08.862Z"
+      "createdAt": "2025-11-05T20:26:08.862Z",
+      "note": "darkle"
     }
   ]
 }
