@@ -219,39 +219,42 @@ function dbAlertUid(a){
 
 let DB_ALERTS_FIRST_SHOWN = false;
 
-async function dbPollAlerts(){
-  const key = dbGetClientKey();
-  if (!key){ console.debug('[alerts] no key'); return; } // server requires key
+let DB_LAST_ALERT_TS = Number(localStorage.getItem('db_last_alert_ts_v1') || 0);
 
-  try{
-    const res = await fetch(`${USER_API_BASE}/alerts?key=${encodeURIComponent(key)}`, { cache:'no-store' });
-    if (!res.ok){ console.debug('[alerts] http', res.status); return; }
-    const j = await res.json().catch(()=>null);
-    const arr = j && Array.isArray(j.alerts) ? j.alerts : (Array.isArray(j) ? j : []);
-    if (!arr.length){ return; }
+async function dbPollAlerts() {
+  const key = dbGetClientKey();
+  if (!key) return;
+
+  try {
+    const res = await fetch(`${USER_API_BASE}/alerts?key=${encodeURIComponent(key)}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const j = await res.json().catch(() => null);
+    const arr = (j && Array.isArray(j.alerts)) ? j.alerts : (Array.isArray(j) ? j : []);
+    if (!arr.length) return;
 
     const seen = dbSeenStore(true);
     const incoming = [];
+    let maxTs = DB_LAST_ALERT_TS;
 
-    for (const a of arr){
+    for (const a of arr) {
       const uid = dbAlertUid(a);
-      if (!seen[uid]) incoming.push({a, uid});
+      const ts  = Number(a.id || a.timestamp || 0) || 0;
+      if (ts > maxTs) maxTs = ts;
+      if (!seen[uid] && ts > DB_LAST_ALERT_TS) incoming.push({ a, uid, ts });
     }
 
-    // If all appear "seen" due to missing ids/timestamps, show the most recent once
-    if (!incoming.length && !DB_ALERTS_FIRST_SHOWN){
-      const last = arr[arr.length - 1];
-      if (last) incoming.push({ a: last, uid: 'fallback:'+dbAlertUid(last) });
-    }
+    incoming.sort((x,y) => (x.ts||0) - (y.ts||0));
 
-    for (const {a, uid} of incoming){
+    for (const { a, uid, ts } of incoming) {
       if (a && a.message) dbShowAlertToast(a.message);
       dbSeenStore().add(uid);
-      DB_ALERTS_FIRST_SHOWN = true;
+      if (ts > DB_LAST_ALERT_TS) DB_LAST_ALERT_TS = ts;
     }
-  }catch(e){
-    // swallow
-  }
+
+    // Advance watermark even if nothing new was shown, so a reload won't replay the latest alert
+    if (maxTs > DB_LAST_ALERT_TS) DB_LAST_ALERT_TS = maxTs;
+    localStorage.setItem('db_last_alert_ts_v1', String(DB_LAST_ALERT_TS));
+  } catch {}
 }
 
 // Kick off (every 10s)
