@@ -104,23 +104,8 @@ const UI_VER = (() => {
     const USER_API_BASE = 'https://dbserver-8bhx.onrender.com/api/user';
 const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
     let __MAP__ = { players: {} };
-  // --- Alerts: discover key, poll server, show toast ---
-function dbGetClientKey() {
-  try {
-    // try your usual places first
-    return (
-      localStorage.getItem('db_size_key') ||
-      localStorage.getItem('db_user_key') ||
-      (typeof GM_getValue === 'function' && (
-        GM_getValue('db_size_key') || GM_getValue('db_user_key') || GM_getValue('size_key') || GM_getValue('user_key')
-      )) ||
-      null
-    );
-  } catch { return null; }
-}
-
+ // --- Alerts: poll server and toast ---
 function dbShowAlertToast(msg) {
-  // lightweight toast
   const t = document.createElement('div');
   t.className = 'db-alert-toast';
   t.textContent = msg;
@@ -128,101 +113,45 @@ function dbShowAlertToast(msg) {
   setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 500); }, 5500);
 }
 
-// add a couple of styles inside your injectStyles() CSS as well:
-/// .db-alert-toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);
-///   padding:10px 14px;background:rgba(0,0,0,.85);color:#fff;border:1px solid rgba(255,255,255,.18);
-///   border-radius:10px;backdrop-filter:blur(6px);z-index:2147483647;font:13px ui-monospace;}
-/// .db-alert-toast.hide{opacity:0;transition:opacity .45s ease;}
+// Try to find a stored key (adjust if you store it elsewhere)
+function dbGetClientKey() {
+  try {
+    return (
+      localStorage.getItem('db_user_key') ||
+      localStorage.getItem('db_size_key') ||
+      null
+    );
+  } catch { return null; }
+}
 
 let DB_LAST_ALERT_TS = Number(localStorage.getItem('db_last_alert_ts_v1') || 0);
 
 async function dbPollAlerts() {
   const key = dbGetClientKey();
-  if (!key) return; // no key bound on this client yet
+  // If you do not persist a key on clients, either:
+  //  A) add that to localStorage somewhere in your bootstrap, or
+  //  B) change the server route to allow missing keys for "all" (see step 2)
+  if (!key) return;
 
   try {
     const res = await fetch(`${USER_API_BASE}/alerts?key=${encodeURIComponent(key)}`, { cache: 'no-store' });
     if (!res.ok) return;
     const j = await res.json().catch(() => null);
     const arr = (j && Array.isArray(j.alerts)) ? j.alerts : [];
-    // only show alerts we haven't seen yet
-    const fresh = arr.filter(a => Number(a.timestamp || 0) > DB_LAST_ALERT_TS);
-    fresh.sort((a,b) => Number(a.timestamp) - Number(b.timestamp));
+    const fresh = arr.filter(a => Number(a.id || a.timestamp || 0) > DB_LAST_ALERT_TS);
+    fresh.sort((a,b) => Number(a.id || a.timestamp) - Number(b.id || b.timestamp));
     for (const a of fresh) {
       if (a && a.message) dbShowAlertToast(a.message);
-      DB_LAST_ALERT_TS = Number(a.timestamp || DB_LAST_ALERT_TS);
+      DB_LAST_ALERT_TS = Number(a.id || a.timestamp || DB_LAST_ALERT_TS);
     }
     localStorage.setItem('db_last_alert_ts_v1', String(DB_LAST_ALERT_TS));
   } catch {}
 }
 
 // start polling
-setTimeout(dbPollAlerts, 1200);
+setTimeout(dbPollAlerts, 1500);
 setInterval(dbPollAlerts, 10000);
 
-
-function resolveServerKey() {
-  var sid = new URLSearchParams(location.search).get('serverId') || '';
-  var m = sid.match(/^(us|eu)-(1|5|20)/i);
-  var region = m ? m[1].toLowerCase() : 'us';
-  var amount = m ? m[2] : '1';
-  return { region: region, amount: amount, serverKey: region + '-' + amount };
-}
-function normalizeFilterSort(arr) {
-  var out = [];
-  for (var i = 0; i < arr.length; i++) {
-    var p = arr[i];
-
-    var name = null;
-    if (typeof p.name === 'string' && p.name) name = p.name;
-    else if (typeof p.username === 'string' && p.username) name = p.username;
-    else if (typeof p.playerName === 'string' && p.playerName) name = p.playerName;
-    else name = '#' + (i + 1);
-
-    var privyId = null;
-    if (p.privyId != null) privyId = p.privyId;
-    else if (p.id != null) privyId = p.id;
-    else if (p.playerId != null) privyId = p.playerId;
-
-    var sRaw = 0;
-    if (p.size != null) sRaw = p.size;
-    else if (p.snakeSize != null) sRaw = p.snakeSize;
-    else if (p.length != null) sRaw = p.length;
-
-    var mvRaw = 0;
-    if (p.monetaryValue != null) mvRaw = p.monetaryValue;
-    else if (p.value != null) mvRaw = p.value;
-    else if (p.money != null) mvRaw = p.money;
-    else if (p.cash != null) mvRaw = p.cash;
-
-    var sizeNum = Number(sRaw);
-    if (!isFinite(sizeNum)) sizeNum = 0;
-
-    var mvNum = Number(mvRaw);
-    if (!isFinite(mvNum)) mvNum = 0;
-
-    if (mvNum > 0 && sizeNum > 2) {
-      out.push({
-        name: name,
-        privyId: privyId,
-        size: sizeNum,
-        monetaryValue: mvNum
-      });
-    }
-  }
-
-  out.sort(function(a, b) {
-    var d = (b.monetaryValue || 0) - (a.monetaryValue || 0);
-    if (d !== 0) return d;
-    d = (b.size || 0) - (a.size || 0);
-    if (d !== 0) return d;
-    var an = String(a.name || '');
-    var bn = String(b.name || '');
-    return an.localeCompare(bn);
-  });
-
-  return out;
-}
 
 // ————— Username Info Modal (drop-in, unchanged styling) —————
 let INFO_BOX = null, INFO_HEADER = null, INFO_BODY = null;
@@ -897,6 +826,9 @@ setInterval(async () => {
 
 
       #ub-status{ opacity:.88; } #ub-ver{ opacity:.75; }
+      .db-alert-toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);padding:10px 14px;background:rgba(0,0,0,.85);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:10px;backdrop-filter:blur(6px);z-index:2147483647;font:13px ui-monospace;}
+.db-alert-toast.hide{opacity:0;transition:opacity .45s ease;}
+
 
     `;
     document.head.appendChild(s);
