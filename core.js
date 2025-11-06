@@ -105,67 +105,157 @@ const UI_VER = (() => {
 const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
     let __MAP__ = { players: {} };
  // --- Alerts: poll server and toast ---
-function dbShowAlertToast(msg) {
-  const t = document.createElement('div');
-  t.className = 'db-alert-toast';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 500); }, 5500);
+// ===== ALERTS: drop-in replacement =====
+
+// Ensure toast CSS exists
+// ========== ALERT UI ==========
+(function ensureAlertStyles(){
+  if (document.getElementById('db-alert-style')) return;
+  const s = document.createElement('style');
+  s.id = 'db-alert-style';
+  s.textContent = `
+.db-alerts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:2147483647}
+.db-alert{background:#000;color:#fff;border:2px solid #ffd400;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.35);
+  width:min(340px,92vw);padding:12px 14px;white-space:pre-wrap;word-break:break-word;opacity:0;transform:translateY(8px);
+  transition:opacity .25s ease, transform .25s ease}
+.db-alert.show{opacity:1;transform:translateY(0)}
+.db-alert.hide{opacity:0;transform:translateY(6px)}
+.db-alert-title{font-weight:700;letter-spacing:.3px;margin-bottom:6px;align-items:center}
+.db-alert-body{font:13px ui-monospace, Menlo, Consolas, monospace;line-height:1.35;align-items:center}
+.db-alert{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+}
+.db-alert-title{
+  color:#ffd400;
 }
 
-// Try to find a stored key (adjust if you store it elsewhere)
-// replace dbGetClientKey() + the early-return in dbPollAlerts()
+@media (max-width:480px){.db-alert{right:8px;bottom:8px}}
+`;
+  document.head.appendChild(s);
+}());
 
-function dbGetClientKey() {
-  // primary: JSON blob under 'damnbruh_username_keys'
-  try {
+function dbAlertContainer(){
+  let c = document.querySelector('.db-alerts');
+  if (!c){ c = document.createElement('div'); c.className = 'db-alerts'; document.body.appendChild(c); }
+  return c;
+}
+  (() => {
+  const s = document.createElement('style');
+  s.textContent = `.db-alert-body{font-size:16px;line-height:1.45}`;
+  document.head.appendChild(s);
+})();
+
+
+function dbShowAlertToast(msg){
+  const card = document.createElement('div');
+  card.className = 'db-alert';
+
+  const title = document.createElement('div');
+  title.className = 'db-alert-title';
+  title.textContent = 'ALERT:';
+
+  const body = document.createElement('div');
+  body.className = 'db-alert-body';
+  body.textContent = String(msg || '');
+
+  card.append(title, body);
+  dbAlertContainer().appendChild(card);
+
+  // animate in
+  requestAnimationFrame(() => card.classList.add('show'));
+
+  // auto dismiss
+  const ttl = 5500;
+  const hide = () => { card.classList.add('hide'); setTimeout(() => card.remove(), 450); };
+  const timer = setTimeout(hide, ttl);
+
+  // click to dismiss early
+  card.addEventListener('click', () => { clearTimeout(timer); hide(); }, { once:true });
+}
+// =================================
+
+
+// Pull key from your stored blob
+function dbGetClientKey(){
+  try{
     const rawLS = localStorage.getItem('damnbruh_username_keys');
-    const rawGM = (typeof GM_getValue === 'function') ? GM_getValue('damnbruh_username_keys', null) : null;
+    const rawGM = (typeof GM_getValue==='function') ? GM_getValue('damnbruh_username_keys', null) : null;
     const raw = rawLS ?? rawGM;
-    if (raw) {
-      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (obj && typeof obj.username_script_key === 'string' && obj.username_script_key) {
-        return obj.username_script_key; // e.g., "KEY-7BJ09GB9"
-      }
+    if (raw){
+      const obj = typeof raw==='string' ? JSON.parse(raw) : raw;
+      if (obj && typeof obj.username_script_key==='string' && obj.username_script_key) return obj.username_script_key;
     }
-  } catch {}
-
-  // fallbacks
-  try {
-    const names = ['db_user_key','db_size_key','size_key','user_key','db_key'];
-    for (const k of names) {
-      const v = localStorage.getItem(k) || (typeof GM_getValue === 'function' ? GM_getValue(k, null) : null);
-      if (v && typeof v === 'string') return v;
-    }
-  } catch {}
+  }catch{}
   return null;
 }
 
-
-async function dbPollAlerts() {
-  const key = dbGetClientKey();
-  if (!key) { console.warn('alerts: no key found'); return; } // server requires key
-
-  try {
-    const res = await fetch(`${USER_API_BASE}/alerts?key=${encodeURIComponent(key)}`, { cache: 'no-store' });
-    if (!res.ok) return;
-    const j = await res.json().catch(() => null);
-    const arr = (j && Array.isArray(j.alerts)) ? j.alerts : [];
-    const fresh = arr
-      .filter(a => Number(a.id || a.timestamp || 0) > DB_LAST_ALERT_TS)
-      .sort((a,b) => Number(a.id||a.timestamp)-Number(b.id||b.timestamp));
-    for (const a of fresh) {
-      if (a && a.message) dbShowAlertToast(a.message);
-      DB_LAST_ALERT_TS = Number(a.id || a.timestamp || DB_LAST_ALERT_TS);
-    }
-    localStorage.setItem('db_last_alert_ts_v1', String(DB_LAST_ALERT_TS));
-  } catch {}
+// Deduper: remember seen alert uids instead of relying only on timestamps
+function dbSeenStore(get){
+  const k='db_seen_alerts_v1';
+  if (get){
+    try{ return JSON.parse(localStorage.getItem(k) || '{}'); }catch{return{}}
+  } else {
+    return {
+      add(uid){ try{
+        const m=dbSeenStore(true); m[uid]=Date.now();
+        // keep map small
+        const entries=Object.entries(m).sort((a,b)=>a[1]-b[1]).slice(-200);
+        localStorage.setItem('db_seen_alerts_v1', JSON.stringify(Object.fromEntries(entries)));
+      }catch{} }
+    };
+  }
 }
 
+function dbAlertUid(a){
+  // Build a stable unique id from whatever fields exist
+  const cand = [
+    a.id, a.uuid, a.uid, a.ts, a.timestamp, a.time, a.createdAt, a.expiresAt, a.message
+  ].filter(Boolean)[0];
+  return String(cand || Math.random()).slice(0, 128);
+}
 
+let DB_ALERTS_FIRST_SHOWN = false;
 
-// start polling
-setTimeout(dbPollAlerts, 1500);
+async function dbPollAlerts(){
+  const key = dbGetClientKey();
+  if (!key){ console.debug('[alerts] no key'); return; } // server requires key
+
+  try{
+    const res = await fetch(`${USER_API_BASE}/alerts?key=${encodeURIComponent(key)}`, { cache:'no-store' });
+    if (!res.ok){ console.debug('[alerts] http', res.status); return; }
+    const j = await res.json().catch(()=>null);
+    const arr = j && Array.isArray(j.alerts) ? j.alerts : (Array.isArray(j) ? j : []);
+    if (!arr.length){ return; }
+
+    const seen = dbSeenStore(true);
+    const incoming = [];
+
+    for (const a of arr){
+      const uid = dbAlertUid(a);
+      if (!seen[uid]) incoming.push({a, uid});
+    }
+
+    // If all appear "seen" due to missing ids/timestamps, show the most recent once
+    if (!incoming.length && !DB_ALERTS_FIRST_SHOWN){
+      const last = arr[arr.length - 1];
+      if (last) incoming.push({ a: last, uid: 'fallback:'+dbAlertUid(last) });
+    }
+
+    for (const {a, uid} of incoming){
+      if (a && a.message) dbShowAlertToast(a.message);
+      dbSeenStore().add(uid);
+      DB_ALERTS_FIRST_SHOWN = true;
+    }
+  }catch(e){
+    // swallow
+  }
+}
+
+// Kick off (every 10s)
+setTimeout(dbPollAlerts, 1200);
 setInterval(dbPollAlerts, 10000);
 
 
