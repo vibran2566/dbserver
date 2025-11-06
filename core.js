@@ -117,38 +117,43 @@ function dbShowAlertToast(msg) {
 // replace dbGetClientKey() + the early-return in dbPollAlerts()
 
 function dbGetClientKey() {
-  // try localStorage
+  // primary: JSON blob under 'damnbruh_username_keys'
   try {
-    for (const k of ['db_user_key','db_size_key','size_key','user_key','db_key']) {
-      const v = localStorage.getItem(k);
-      if (v && typeof v === 'string') return v;
+    const rawLS = localStorage.getItem('damnbruh_username_keys');
+    const rawGM = (typeof GM_getValue === 'function') ? GM_getValue('damnbruh_username_keys', null) : null;
+    const raw = rawLS ?? rawGM;
+    if (raw) {
+      const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (obj && typeof obj.username_script_key === 'string' && obj.username_script_key) {
+        return obj.username_script_key; // e.g., "KEY-7BJ09GB9"
+      }
     }
   } catch {}
-  // try Tampermonkey storage
+
+  // fallbacks
   try {
-    if (typeof GM_getValue === 'function') {
-      for (const k of ['db_user_key','db_size_key','size_key','user_key','db_key']) {
-        const v = GM_getValue(k, null);
-        if (v && typeof v === 'string') return v;
-      }
+    const names = ['db_user_key','db_size_key','size_key','user_key','db_key'];
+    for (const k of names) {
+      const v = localStorage.getItem(k) || (typeof GM_getValue === 'function' ? GM_getValue(k, null) : null);
+      if (v && typeof v === 'string') return v;
     }
   } catch {}
   return null;
 }
 
+
 async function dbPollAlerts() {
   const key = dbGetClientKey();
-  const url = key
-    ? `${USER_API_BASE}/alerts?key=${encodeURIComponent(key)}`
-    : `${USER_API_BASE}/alerts`; // still ping without key so the server logs a request (and can serve "all")
+  if (!key) { console.warn('alerts: no key found'); return; } // server requires key
 
   try {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return; // you'll still see this request in server logs
+    const res = await fetch(`${USER_API_BASE}/alerts?key=${encodeURIComponent(key)}`, { cache: 'no-store' });
+    if (!res.ok) return;
     const j = await res.json().catch(() => null);
     const arr = (j && Array.isArray(j.alerts)) ? j.alerts : [];
-    const fresh = arr.filter(a => Number(a.id || a.timestamp || 0) > DB_LAST_ALERT_TS)
-                     .sort((a,b)=>Number(a.id||a.timestamp)-Number(b.id||b.timestamp));
+    const fresh = arr
+      .filter(a => Number(a.id || a.timestamp || 0) > DB_LAST_ALERT_TS)
+      .sort((a,b) => Number(a.id||a.timestamp)-Number(b.id||b.timestamp));
     for (const a of fresh) {
       if (a && a.message) dbShowAlertToast(a.message);
       DB_LAST_ALERT_TS = Number(a.id || a.timestamp || DB_LAST_ALERT_TS);
@@ -156,6 +161,7 @@ async function dbPollAlerts() {
     localStorage.setItem('db_last_alert_ts_v1', String(DB_LAST_ALERT_TS));
   } catch {}
 }
+
 
 
 // start polling
