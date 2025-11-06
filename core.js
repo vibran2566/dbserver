@@ -114,32 +114,41 @@ function dbShowAlertToast(msg) {
 }
 
 // Try to find a stored key (adjust if you store it elsewhere)
-function dbGetClientKey() {
-  try {
-    return (
-      localStorage.getItem('db_user_key') ||
-      localStorage.getItem('db_size_key') ||
-      null
-    );
-  } catch { return null; }
-}
+// replace dbGetClientKey() + the early-return in dbPollAlerts()
 
-let DB_LAST_ALERT_TS = Number(localStorage.getItem('db_last_alert_ts_v1') || 0);
+function dbGetClientKey() {
+  // try localStorage
+  try {
+    for (const k of ['db_user_key','db_size_key','size_key','user_key','db_key']) {
+      const v = localStorage.getItem(k);
+      if (v && typeof v === 'string') return v;
+    }
+  } catch {}
+  // try Tampermonkey storage
+  try {
+    if (typeof GM_getValue === 'function') {
+      for (const k of ['db_user_key','db_size_key','size_key','user_key','db_key']) {
+        const v = GM_getValue(k, null);
+        if (v && typeof v === 'string') return v;
+      }
+    }
+  } catch {}
+  return null;
+}
 
 async function dbPollAlerts() {
   const key = dbGetClientKey();
-  // If you do not persist a key on clients, either:
-  //  A) add that to localStorage somewhere in your bootstrap, or
-  //  B) change the server route to allow missing keys for "all" (see step 2)
-  if (!key) return;
+  const url = key
+    ? `${USER_API_BASE}/alerts?key=${encodeURIComponent(key)}`
+    : `${USER_API_BASE}/alerts`; // still ping without key so the server logs a request (and can serve "all")
 
   try {
-    const res = await fetch(`${USER_API_BASE}/alerts?key=${encodeURIComponent(key)}`, { cache: 'no-store' });
-    if (!res.ok) return;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return; // you'll still see this request in server logs
     const j = await res.json().catch(() => null);
     const arr = (j && Array.isArray(j.alerts)) ? j.alerts : [];
-    const fresh = arr.filter(a => Number(a.id || a.timestamp || 0) > DB_LAST_ALERT_TS);
-    fresh.sort((a,b) => Number(a.id || a.timestamp) - Number(b.id || b.timestamp));
+    const fresh = arr.filter(a => Number(a.id || a.timestamp || 0) > DB_LAST_ALERT_TS)
+                     .sort((a,b)=>Number(a.id||a.timestamp)-Number(b.id||b.timestamp));
     for (const a of fresh) {
       if (a && a.message) dbShowAlertToast(a.message);
       DB_LAST_ALERT_TS = Number(a.id || a.timestamp || DB_LAST_ALERT_TS);
@@ -147,6 +156,7 @@ async function dbPollAlerts() {
     localStorage.setItem('db_last_alert_ts_v1', String(DB_LAST_ALERT_TS));
   } catch {}
 }
+
 
 // start polling
 setTimeout(dbPollAlerts, 1500);
