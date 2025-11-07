@@ -2,14 +2,16 @@
   "keys": [
     {
       "key": "KEY-UUES85RK",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T12:55:50.267Z",
       "note": "Mr-1221",
       "lastUsedAt": "2025-11-07T16:20:26.735Z",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
-      "version": "1.1.1"
+      "version": "1.1.1",
+      "usedAt": "2025-11-07T17:13:52.629Z",
+      "boundProof": "fbcc7fc0ac90c9192888cc54db39b22bbb4fc769b18bb29ea9c8c360d673a1dc"
     },
     {
       "key": "KEY-D7CDUFG0",
