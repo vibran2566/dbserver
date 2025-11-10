@@ -237,6 +237,15 @@ async function dbPollShard(serverKey) {
         monetaryValue: Number(p.monetaryValue) || 0,
         rank: i + 1
       }));
+    for (const p of top) {
+  const mv = Number(p?.monetaryValue) || 0;
+  if (mv > 0 && p?.privyId) {
+    const jt = Number(p?.joinTime) || nowMs();
+    recordActivity(p.privyId, nowMs(), jt);
+    dbDirty = true;
+  }
+}
+
 // feed mapping so icons can render
 for (const p of filtered) {
   const id   = p.privyId;
