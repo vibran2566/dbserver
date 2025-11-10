@@ -63,15 +63,6 @@
       "version": "1.1.1"
     },
     {
-      "key": "KEY-151Q00S7",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-11-03T19:02:17.386Z",
-      "usedAt": "2025-11-03T19:02:32.550Z",
-      "boundProof": "01b7d43cb843279ddbb9810826153429951d679cc38d08f3b7b588843c731273",
-      "lastUsedAt": "2025-11-05T14:31:42.326Z"
-    },
-    {
       "key": "KEY-SCASNFRI",
       "used": true,
       "revoked": false,
