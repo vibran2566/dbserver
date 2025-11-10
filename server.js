@@ -62,6 +62,11 @@ let __JOIN_BUFFER__ = [];                   // events queued between flushes
 let __USERNAME_MAPPING__ = { players: {}, updatedAt: 0 };
 let __IS_FLUSHING__ = false;
 
+// --- Activity timeline constants ---
+const INACTIVITY_MS = 3 * 60 * 1000;           // 3 minutes
+const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // keep 31 days
+
+
 
 function readCoreBytes() {
   const code = fs.readFileSync(CORE_PATH, "utf8");
@@ -119,6 +124,84 @@ function dbToGamePlayersUrl(serverKey) {
 }
 function dbRegion(serverKey) { return serverKey.startsWith('us-') ? 'US' : 'EU'; }
 function nowMs() { return Date.now(); }
+
+// --- Activity timeline helpers ---
+function ensureActivityPlayer(privyId) {
+  if (!__USERNAME_MAPPING__.players[privyId]) {
+    __USERNAME_MAPPING__.players[privyId] = { usernames:{}, topUsernames:[], regionCounts:{US:0,EU:0}, firstSeen: nowMs(), lastSeen: 0 };
+  }
+  const p = __USERNAME_MAPPING__.players[privyId];
+  if (!Array.isArray(p.sessions)) p.sessions = [];
+  if (typeof p.lastSeenActivity !== 'number') p.lastSeenActivity = 0;
+  return p;
+}
+function compactTailSessions(p) {
+  const a = p.sessions;
+  if (!a || a.length < 2) return;
+  const B = a[a.length - 1];
+  const A = a[a.length - 2];
+  if ((B.start - A.end) < INACTIVITY_MS) {
+    A.end = Math.max(A.end, B.end);
+    a.pop();
+  }
+}
+function trimOldSessions(p) {
+  const cutoff = nowMs() - RETAIN_MS;
+  p.sessions = (p.sessions||[]).filter(s => (s.end ?? s.start) >= cutoff);
+}
+function recordActivity(privyId, now, joinTime) {
+  const p = ensureActivityPlayer(privyId);
+  const last = p.sessions[p.sessions.length - 1];
+  const firstTimeSeen = !last && !p.lastSeenActivity;
+  const startMs = (firstTimeSeen && Number.isFinite(joinTime)) ? Number(joinTime) : now;
+  if (!last) {
+    p.sessions.push({ start: startMs, end: now });
+  } else if ((now - p.lastSeenActivity) > INACTIVITY_MS) {
+    p.sessions.push({ start: Math.min(startMs, now), end: now });
+  } else {
+    last.end = now;
+  }
+  compactTailSessions(p);
+  trimOldSessions(p);
+  p.lastSeenActivity = now;
+}
+
+// Binning
+const WINDOW_SPECS = {
+  '1h': { binMs:  5 * 60 * 1000, count: 12 },
+  '1d': { binMs: 60 * 60 * 1000, count: 24 },
+  '1w': { binMs: 12 * 60 * 60 * 1000, count: 14 },
+  '1m': { binMs: 24 * 60 * 60 * 1000, count: 30 },
+};
+
+function alignWindowStart(now, binMs, count, tzOffsetMin) {
+  const off = (tzOffsetMin|0) * 60 * 1000;
+  const localNow = now - off;
+  const alignedRight = Math.floor(localNow / binMs) * binMs;
+  const startLocal = alignedRight - (count - 1) * binMs;
+  return startLocal + off;
+}
+
+function makeBinsFor(p, windowKey, tzOffsetMin) {
+  const spec = WINDOW_SPECS[windowKey] || WINDOW_SPECS['1h'];
+  const now = nowMs();
+  const startMs = alignWindowStart(now, spec.binMs, spec.count, tzOffsetMin);
+  const endMs = startMs + spec.count * spec.binMs;
+
+  const bins = new Uint8Array(spec.count);
+  const sessions = Array.isArray(p.sessions) ? p.sessions : [];
+
+  for (const s of sessions) {
+    const a = Math.max(s.start, startMs);
+    const b = Math.min(s.end ?? s.start, endMs);
+    if (b <= a) continue;
+    let i = Math.max(0, Math.floor((a - startMs) / spec.binMs));
+    let j = Math.min(spec.count - 1, Math.floor((b - 1 - startMs) / spec.binMs));
+    for (let k = i; k <= j; k++) bins[k] = 1;
+  }
+  return { windowMs: spec.count * spec.binMs, binMs: spec.binMs, startMs, bins: Array.from(bins).join('') };
+}
+
 
 // Load usernames file to memory (compatible with your existing schema)
 let dbUsernamesMem = loadUserFile();
@@ -280,6 +363,11 @@ async function flushUsernamesNow() {
     return true;
   } finally {
     __IS_FLUSHING__ = false;
+
+// --- Activity timeline constants ---
+const INACTIVITY_MS = 3 * 60 * 1000;           // 3 minutes
+const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // keep 31 days
+
   }
 }
 
@@ -296,6 +384,46 @@ app.get('/api/game/leaderboard', (req, res) => {
   const stale = nowMs() - (snap.updatedAt || 0) > 8000;
   res.json({ ok:true, serverKey, updatedAt: snap.updatedAt || 0, stale, entries: snap.top || [] });
 });
+// GET /api/overlay/activity
+app.get('/api/overlay/activity', (req, res) => {
+  try {
+    const privyId = String(req.query.privyId || '');
+    const windowKey = String(req.query.window || '1h');
+    const tzOffsetMin = Number(req.query.tzOffsetMin || 0);
+    const spec = WINDOW_SPECS[windowKey] || WINDOW_SPECS['1h'];
+    const p = __USERNAME_MAPPING__.players[privyId];
+    if (!p) {
+      const startMs = alignWindowStart(nowMs(), spec.binMs, spec.count, tzOffsetMin);
+      return res.json({ ok:true, privyId, window:windowKey, windowMs: spec.count*spec.binMs, binMs: spec.binMs, startMs, bins: ''.padStart(spec.count, '0') });
+    }
+    const out = makeBinsFor(p, windowKey, tzOffsetMin);
+    res.json({ ok:true, privyId, window:windowKey, ...out });
+  } catch (e) {
+    res.status(500).json({ ok:false, error:e?.message||String(e) });
+  }
+});
+
+// POST /api/overlay/activity/batch
+app.post('/api/overlay/activity/batch', express.json(), (req, res) => {
+  try {
+    const body = req.body || {};
+    const ids = Array.isArray(body.ids) ? body.ids.slice(0, 50) : [];
+    const windowKey = String(req.query.window || body.window || '1h');
+    const tzOffsetMin = Number(req.query.tzOffsetMin || body.tzOffsetMin || 0);
+    const spec = WINDOW_SPECS[windowKey] || WINDOW_SPECS['1h'];
+
+    const data = {};
+    for (const id of ids) {
+      const p = __USERNAME_MAPPING__.players[id];
+      data[id] = p ? makeBinsFor(p, windowKey, tzOffsetMin).bins : ''.padStart(spec.count, '0');
+    }
+    const startMs = alignWindowStart(nowMs(), spec.binMs, spec.count, tzOffsetMin);
+    res.json({ ok:true, window:windowKey, binMs:spec.binMs, startMs, data });
+  } catch (e) {
+    res.status(500).json({ ok:false, error:e?.message||String(e) });
+  }
+});
+
 
 // GET /api/game/usernames?serverKey=us-1
 app.get('/api/game/usernames', (req, res) => {
