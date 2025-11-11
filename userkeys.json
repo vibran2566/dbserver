@@ -81,6 +81,12 @@
       "usedAt": "2025-11-05T20:57:20.404Z",
       "boundProof": "71888433ed8e924ed6aadad3ca40435b71b5c70d24c66f4b0848c51d77d3c940",
       "lastUsedAt": "2025-11-08T00:55:45.505Z"
+    },
+    {
+      "key": "KEY-X91Z8VZV",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2025-11-11T17:15:48.928Z"
     }
   ]
 }
