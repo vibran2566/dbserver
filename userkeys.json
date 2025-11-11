@@ -84,9 +84,11 @@
     },
     {
       "key": "KEY-X91Z8VZV",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-11-11T17:15:48.928Z"
+      "createdAt": "2025-11-11T17:15:48.928Z",
+      "usedAt": "2025-11-11T17:15:56.754Z",
+      "boundProof": "36d21723140b6151f8995f46810b22fa0c07c6f7094b622cd5dd40d5e547e412"
     }
   ]
 }
