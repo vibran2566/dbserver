@@ -178,6 +178,49 @@ function recordActivity(privyId, now, joinTime) {
   p.lastSeenActivity = now;
 }
 
+function compactTailSessions(p){
+  if (!p || !Array.isArray(p.sessions) || p.sessions.length < 2) return;
+  const a = p.sessions;
+  const n = a.length;
+  const A = a[n - 2];
+  const B = a[n - 1];
+
+  const Aend   = Number(A.end ?? A.start);
+  const Bstart = Number(B.start);
+  const Bend   = Number(B.end ?? B.start);
+  if (!Number.isFinite(Aend) || !Number.isFinite(Bstart) || !Number.isFinite(Bend)) return;
+
+  // Merge if the gap between A and B is less than the inactivity threshold
+  if ((Bstart - Aend) < INACTIVITY_MS) {
+    A.end = Math.max(Aend, Bend);
+    a.pop();
+  }
+}
+
+
+
+function compactTailSessions(p){
+  if (!p || !Array.isArray(p.sessions) || p.sessions.length < 2) return;
+
+  const a = p.sessions;
+  const n = a.length;
+  const A = a[n - 2];
+  const B = a[n - 1];
+
+  const Aend   = Number(A.end ?? A.start);
+  const Bstart = Number(B.start);
+  const Bend   = Number(B.end ?? B.start);
+  if (!Number.isFinite(Aend) || !Number.isFinite(Bstart) || !Number.isFinite(Bend)) return;
+
+  // Merge if the gap between A and B is less than INACTIVITY_MS
+  if ((Bstart - Aend) < INACTIVITY_MS) {
+    A.end = Math.max(Aend, Bend);
+    a.pop();
+  }
+}
+
+
+
 // Binning
 const WINDOW_SPECS = {
   '1h': { binMs:  5 * 60 * 1000, count: 12 },
@@ -275,16 +318,6 @@ for (const p of top) {
   recordActivity(p.privyId, ts, p.joinTime);
   recordPing(p.privyId, p.name, region, ts);
 }
-
-    for (const p of top) {
-  const mv = Number(p?.monetaryValue) || 0;
-  if (mv > 0 && p?.privyId) {
-    const jt = Number(p?.joinTime) || nowMs();
-    recordActivity(p.privyId, nowMs(), jt);
-    dbDirty = true;
-  }
-}
-
 // feed mapping so icons can render
 for (const p of filtered) {
   const id   = p.privyId;
@@ -409,14 +442,7 @@ async function flushUsernamesNow() {
     await fsp.writeFile(tmp, json);
     await fsp.rename(tmp, USERNAMES_FILE_PATH);   // atomic swap
     return true;
-  } finally {
-    __IS_FLUSHING__ = false;
-
-// --- Activity timeline constants ---
-const INACTIVITY_MS = 3 * 60 * 1000;           // 3 minutes
-const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // keep 31 days
-
-  }
+  } finally { __IS_FLUSHING__ = false; }
 }
 
 // Schedule 15s periodic flush
@@ -644,7 +670,7 @@ app.get("/api/user/debug/state", async (req, res) => {
   try {
     let size = 0, mtime = null;
     try {
-      const st = await fs.stat(USERNAMES_FILE_PATH);
+      const st = await fsp.stat(USERNAMES_FILE_PATH);
       size = st.size; mtime = st.mtime;
     } catch {}
     res.json({
