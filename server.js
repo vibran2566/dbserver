@@ -1,1253 +1,799 @@
-import express from "express";
-import cors from "cors";
-import rateLimit from "express-rate-limit";
-import morgan from "morgan";
-import fetch from "node-fetch";
-import path from "path";
-import { fileURLToPath } from "url";
-import fs from "fs";              // sync APIs
-import { promises as fsp } from "fs";
-import crypto from "crypto";
-
-// === Local disk usernames store (disk-only) ================================
-const DATA_DIR = process.env.DATA_DIR || "/data";
-fs.mkdirSync(DATA_DIR, { recursive: true });
-const USER_FILE = path.join(DATA_DIR, "usernames.json");
-const __filename = fileURLToPath(import.meta.url);
-const INACTIVITY_MS = 3 * 60 * 1000;            // 3 minutes
-const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // ~31 days
-
-function trimOld(p, now){
-  const cutoff = now - RETAIN_MS;
-  p.sessions = (p.sessions||[]).filter(s => (s.end ?? s.start) >= cutoff);
-  p.pings    = (p.pings   || []).filter(x => x.ts >= cutoff);
-}
-
-
-function alignWindowStart(now, binMs, count, tzOffsetMin){
-  const off = (tzOffsetMin|0) * 60 * 1000;
-  const localNow = now - off;
-  const alignedRight = Math.floor(localNow / binMs) * binMs;
-  const startLocal = alignedRight - (count - 1) * binMs;
-  return startLocal + off;
-}
-const app  = express();
-const jsonBody = express.json({ limit: "256kb" });
-
-
-function loadUserFile(fallback = { players: {} }) {
-  try {
-    if (fs.existsSync(USER_FILE)) {
-      return JSON.parse(fs.readFileSync(USER_FILE, "utf8"));
-    }
-  } catch (e) {
-    console.error("[usernames load]", e?.message || e);
+// core.timeline.v13.1.js — draggable handle fixed; compact tooltip; position persists on timeframe switch
+(() => {
+  if (window.__USERNAME_TRACKER__ && window.__USERNAME_TRACKER__.stop) {
+    try { window.__USERNAME_TRACKER__.stop(); } catch (e) {}
   }
-  return fallback;
-}
-function saveUserFile(obj) {
-  try {
-    fs.writeFileSync(USER_FILE, JSON.stringify(obj, null, 2));
-    return true;
-  } catch (e) {
-    console.error("[usernames save]", e?.message || e);
+
+  let LB_BOX = null, LB_BODY = null, LB_STATUS = null, LB_VER = null;
+  let TICK = null, MAP_INT = null;
+  let __LAST_TOP__ = [];
+
+  const UI_VER = (function(){
+    try {
+      const v = localStorage.getItem('db_core_ver_v1');
+      if (v && /^\d+\.\d+\.\d+$/.test(v)) return 'v' + v;
+    } catch (e) {}
+    try { return 'v' + (GM_info && GM_info.script && (GM_info.script.version || '').replace(/^v?/, '')); }
+    catch (e) { return 'v0.0.0'; }
+  })();
+
+  const USER_API_BASE = 'https://dbserver-8bhx.onrender.com/api/user';
+  const GAME_API_BASE = USER_API_BASE.replace(/\/api\/user$/, '');
+  let __MAP__ = { players: {} };
+
+  const ACT_API_BASE = GAME_API_BASE + '/api/overlay/activity';
+  let ACT_WINDOW = '1h';
+  const ACT_CACHE = new Map();
+
+  const ACT_SPECS = {
+    '1h': { binMs:  5 * 60 * 1000, count: 12 },
+    '1d': { binMs: 60 * 60 * 1000, count: 24 },
+    '1w': { binMs: 12 * 60 * 60 * 1000, count: 14 },
+    '1m': { binMs: 24 * 60 * 60 * 1000, count: 30 }
+  };
+  function alignWindowStartLocal(now, binMs, count){
+    var off = (new Date().getTimezoneOffset()) * 60 * 1000;
+    var localNow = now - off;
+    var alignedRight = Math.floor(localNow / binMs) * binMs;
+    var startLocal = alignedRight - (count - 1) * binMs;
+    return startLocal + off;
+  }
+
+  function drawLargeWithPattern(container, bins, startMs, binMs){
+    container.innerHTML = '';
+
+    var cssW = Math.max(240, (container.clientWidth || parseInt(container.style.width || '0',10) || 300));
+    var baseH = Math.max(28, (container.clientHeight || 28));
+    var labelH = 12, gap = 3;
+    var h = Math.max(baseH, 22 + gap + labelH);
+    var dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+
+    var cvs = document.createElement('canvas');
+    cvs.style.width  = Math.round(cssW) + 'px';
+    cvs.style.height = Math.round(h) + 'px';
+    cvs.width  = Math.round(cssW * dpr);
+    cvs.height = Math.round(h   * dpr);
+    container.appendChild(cvs);
+
+    var ctx = cvs.getContext('2d', { willReadFrequently:true });
+    ctx.scale(dpr, dpr);
+
+    var w = Math.round(cssW);
+    var plotH = h - labelH - gap;
+    var N = bins.length;
+
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = 'rgba(255,255,255,.12)';
+    ctx.fillRect(0,0,w,plotH);
+
+    var x = new Array(N+1);
+    for (var i=0;i<=N;i++) x[i] = Math.round(i * w / N);
+
+    ctx.fillStyle = '#4ade80';
+    for (var i2=0;i2<N;i2++){
+      if (bins[i2] !== '1') continue;
+      var x0 = x[i2], x1 = x[i2+1], ww = Math.max(1, x1 - x0);
+      ctx.fillRect(x0, 0, ww, plotH);
+    }
+
+    var ptn = document.createElement('canvas'); ptn.width=6; ptn.height=6;
+    var pc = ptn.getContext('2d');
+    pc.globalAlpha=0.25; pc.fillStyle='#fff'; pc.fillRect(0,0,6,6);
+    pc.globalAlpha=1; pc.strokeStyle='rgba(0,0,0,.35)'; pc.beginPath(); pc.moveTo(0,6); pc.lineTo(6,0); pc.stroke();
+    var hatch = ctx.createPattern(ptn,'repeat');
+    for (var i3=0;i3<N;i3++){
+      if (bins[i3] !== '1') continue;
+      var x02 = x[i3], x12 = x[i3+1], ww2 = Math.max(1, x12 - x02);
+      ctx.fillStyle = hatch;
+      ctx.fillRect(x02, 0, ww2, plotH);
+    }
+
+    ctx.fillStyle = 'rgba(0,0,0,.32)';
+    for (var i4=1;i4<N;i4++) ctx.fillRect(x[i4], 0, 1, plotH);
+
+    ctx.font = '10px ui-monospace, Menlo, Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+
+    function fmt1h(d){ return d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }); }
+    function fmt1d(d){ return d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }); }
+    function fmt1m(d){ var mo=String(d.getMonth()+1).padStart(2,'0'); var da=String(d.getDate()).padStart(2,'0'); return mo+'/'+da; }
+
+    var lastX = -1e9;
+    for (var i5=0;i5<=N;i5++){
+      var t = new Date(startMs + i5*binMs);
+      var label = '';
+      if (binMs === 5*60*1000)        label = fmt1h(t);
+      else if (binMs === 60*60*1000)  label = fmt1d(t);
+      else if (binMs === 24*60*60*1000) label = fmt1m(t);
+      if (!label) continue;
+      var xi = x[i5];
+      var tw = ctx.measureText(label).width;
+      if (xi - lastX < tw + 8) continue;
+      ctx.fillText(label, xi, plotH + 2);
+      lastX = xi;
+    }
+  }
+
+  function attachTimelineHover(root, container, startMs, binMs, meta, binsString){
+    var tip = document.getElementById('ub-activity-tip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = 'ub-activity-tip';
+      tip.style.cssText = [
+        'position:fixed','pointer-events:none','background:rgba(0,0,0,.95)','color:#fff',
+        'border:1px solid rgba(255,255,255,.16)','border-radius:8px','padding:8px 10px',
+        'font-size:11px','line-height:1.25','box-shadow:0 8px 20px rgba(0,0,0,.5)',
+        'display:none','z-index:2147483647','width:200px','min-height:74px','box-sizing:border-box','white-space:normal'
+      ].join(';');
+      document.body.appendChild(tip);
+    }
+
+    var cvs = container.querySelector('canvas');
+    if (!cvs) return;
+
+    var bins = typeof binsString === 'string' ? binsString : '';
+    var N = meta ? meta.length : (bins ? bins.length : 0);
+
+    function update(e){
+      if (!N) return;
+      var rCanvas = cvs.getBoundingClientRect();
+      var idx = Math.min(N-1, Math.max(0, Math.floor((e.clientX - rCanvas.left) / (rCanvas.width / N))));
+      var a = new Date(startMs + idx*binMs);
+      var b = new Date(a.getTime() + binMs);
+      var m = meta ? meta[idx] : null;
+      var active = bins ? (bins[idx] === '1') : Boolean(m && m.pings);
+      var topUser = (m && m.topUsername) ? m.topUsername : '—';
+      var pings   = (m && typeof m.pings === 'number') ? m.pings : (active ? '—' : 0);
+      var region  = (m && m.topRegion) ? (m.topRegion + ' (' + ((m.topRegionPings|0)) + ')') : '—';
+
+      var dStr = a.toLocaleDateString();
+      var t1 = a.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+      var t2 = b.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+
+      tip.innerHTML =
+        '<div style=\"font-weight:700;margin-bottom:2px;white-space:nowrap\">'+dStr+'</div>' +
+        '<div style=\"margin-bottom:6px;white-space:nowrap\">'+t1+' – '+t2+'</div>' +
+        '<div style=\"display:flex;justify-content:space-between\"><span>Top&nbsp;User:</span><span style=\"max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">'+topUser+'</span></div>' +
+        '<div style=\"display:flex;justify-content:space-between\"><span>Pings:</span><span>'+pings+'</span></div>' +
+        '<div style=\"display:flex;justify-content:space-between\"><span>Region:</span><span>'+region+'</span></div>';
+
+      tip.style.display = 'block';
+
+      var PAD = 12, TW = 200;
+      var VW = innerWidth, VH = innerHeight;
+      var TH = Math.max(74, tip.offsetHeight);
+
+      var left = e.clientX + PAD;
+      var top  = e.clientY + PAD;
+      if (left + TW + 8 > VW) left = e.clientX - PAD - TW;
+      if (top + TH + 8 > VH) top = e.clientY - PAD - TH;
+      left = Math.min(Math.max(8, left), VW - TW - 8);
+      top  = Math.min(Math.max(8, top),  VH - TH - 8);
+      tip.style.left = Math.round(left) + 'px';
+      tip.style.top  = Math.round(top)  + 'px';
+    }
+    function hide(){ tip.style.display = 'none'; }
+
+    if (cvs.__ubMove) {
+      cvs.removeEventListener('mousemove', cvs.__ubMove);
+      cvs.removeEventListener('mouseleave', cvs.__ubLeave);
+    }
+    cvs.__ubMove = update;
+    cvs.__ubLeave = hide;
+    cvs.addEventListener('mousemove', update);
+    cvs.addEventListener('mouseleave', hide);
+  }
+
+  function fetchActivity(ids) {
+    var tzOffsetMin = new Date().getTimezoneOffset();
+    var url = ACT_API_BASE +
+      '/batch?window=' + encodeURIComponent(ACT_WINDOW) +
+      '&tzOffsetMin=' + tzOffsetMin;
+
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: ids })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (!j || j.ok !== true) throw new Error('activity error');
+      return j;
+    });
+  }
+
+  function startActivityRefreshLoop(getTop){
+    var timer = null;
+    function tickOnce(){
+      try {
+        var top = getTop() || [];
+        var ids = (Array.isArray(top) ? top : []).map(function(p){return p.privyId;}).filter(Boolean).slice(0,50);
+        if (!ids.length) return;
+        return fetchActivity(ids).then(function (resp) {
+          var data    = resp.data;
+  var meta    = resp.meta;           // <— NEW
+  var startMs = resp.startMs;
+  var binMs   = resp.binMs;
+  var now     = Date.now();
+          for (var i = 0; i < ids.length; i++) {
+            var id = ids[i];
+            ACT_CACHE.set(ACT_WINDOW + ':' + id, { bins: data[id], startMs: startMs, binMs: binMs, ts: now });
+          }
+        }).catch(function(){});
+      } catch (e) {}
+    }
+    window.__ACT_TICK__ = tickOnce;
+    if (timer) clearInterval(timer);
+    tickOnce();
+    timer = setInterval(tickOnce, 15000);
+  }
+
+  function saveActivityBoxPos(box){
+    try{
+      var snap = { left: box.style.left || '', top: box.style.top || '', right: box.style.right || '' };
+      localStorage.setItem('ub_activity_box_pos', JSON.stringify(snap));
+    }catch(e){}
+  }
+  function restoreActivityBoxPos(box){
+    try{
+      var raw = localStorage.getItem('ub_activity_box_pos');
+      if (!raw) return false;
+      var pos = JSON.parse(raw);
+      if (!pos) return false;
+      if (pos.left && pos.top) {
+        box.style.left = pos.left;
+        box.style.top  = pos.top;
+        box.style.right = 'auto';
+        return true;
+      }
+    }catch(e){}
     return false;
   }
-}
-// Paths + app config  (MOVE THIS UP)
 
-const __dirname  = path.dirname(__filename);
+  function showActivityBox(privyId, displayLabel){
+    var old = document.getElementById('ub-activity-box'); if (old) old.remove();
+    var lb = document.getElementById('username-leaderboard');
+    var lbw = lb ? lb.getBoundingClientRect().width : 300;
+    var W = Math.min(720, Math.max(260, Math.floor(lbw + 24)));
 
+    var box = document.createElement('div');
+    box.id='ub-activity-box';
+    box.style.cssText=[
+      'position:fixed','right:24px','top:72px','background:rgba(0,0,0,.95)','color:#fff',
+      'border:1px solid rgba(255,255,255,.16)','border-radius:12px','padding:12px','padding-top:28px',
+      'z-index:2147483646','min-width:'+W+'px','box-shadow:0 12px 32px rgba(0,0,0,.6)','user-select:none'
+    ].join(';');
 
-const PORT = process.env.PORT || 3000;
+    box.innerHTML = '<div id=\"ub-activity-head\" style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;cursor:move\">'+
+      '<div style=\"font-weight:700\">'+(displayLabel||'Player')+'</div>'+
+      '<div>'+
+        ['1h','1d','1w','1m'].map(function(k){return '<button data-k=\"'+k+'\" style=\"margin-left:4px;border:1px solid rgba(255,255,255,.28);background:rgba(0,0,0,.35);color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;line-height:1.15;height:20px;cursor:pointer;'+(k===ACT_WINDOW?'outline:1.5px solid rgba(74,222,128,.85)':'')+'\">'+k+'</button>';}).join('')+
+        '<button id=\"ub-activity-close\" style=\"margin-left:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;border-radius:4px;padding:1px 8px;font-size:11px;height:20px;line-height:1.1;cursor:pointer\">✕</button>'+
+      '</div>'+
+    '</div>'+
+    '<div id=\"ub-activity-cvs\" style=\"height:36px;position:relative\"></div>';
 
-const ADMIN_TOKEN          = process.env.ADMIN_TOKEN || "";
-const GITHUB_TOKEN         = process.env.GITHUB_TOKEN;
-const GITHUB_REPO          = process.env.GITHUB_REPO;
-const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json";
-const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || "userkeys.json";
-const USERNAMES_FILE_PATH = path.join(DATA_DIR, "usernames.json");
+    document.body.appendChild(box);
 
+    var dragDecor = document.createElement('div');
+    dragDecor.className = 'db-top-drag';
+    dragDecor.style.pointerEvents = 'auto';
+    dragDecor.title = 'Drag';
+    box.appendChild(dragDecor);
 
-// --- Core version + meta helpers ---
-const CORE_PATH = path.join(__dirname, "core.js");
-let ACTIVE_VERSION = process.env.ACTIVE_VERSION || "1.1.1"; // default
-function sha256Hex(s){ return crypto.createHash('sha256').update(s,'utf8').digest('hex'); }
-// In-memory state
-let __JOIN_BUFFER__ = [];                   // events queued between flushes
-let __USERNAME_MAPPING__ = { players: {}, updatedAt: 0 };
-let __IS_FLUSHING__ = false;
+    var head = box.querySelector('#ub-activity-head');
+    Array.prototype.forEach.call(head.querySelectorAll('button'), function(b){ b.style.cursor='pointer'; });
 
-
-
-function readCoreBytes() {
-  const code = fs.readFileSync(CORE_PATH, "utf8");
-  return code;
-}
-
-app.use(express.static(__dirname));
-app.use(morgan("tiny"));
-app.use(express.json({ limit: "256kb" }));
-app.use(cors());
-// app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
-function fileSha256Hex(p) {
-  const buf = fs.readFileSync(p);               // exact bytes you will send
-  return crypto.createHash("sha256").update(buf).digest("hex");
-}
-
-// --- write /version.json so /api/user/core/meta reflects the bump ---
-async function writeVersionJSON(v) {
-  const payload = { version: String(v), bumpedAt: new Date().toISOString() };
-  fs.writeFileSync(VERSION_PATH, JSON.stringify(payload, null, 2));
-  return payload;
-}
-
-// --- sync the version onto every app key record in both key files ---
-async function syncCoreVersionAcrossKeys(newVersion) {
-  const files = [GITHUB_FILE_PATH, USERKEYS_FILE_PATH]; // size keys + username keys
-  for (const FILE of files) {
-    const { data, sha } = await ghLoad(FILE, { keys: [] });
-    let changed = false;
-
-    // set whichever field name you actually use in your admin panel
-    const FIELDS = ["coreVersion", "requiredCore", "version"];
-    for (const k of (data.keys || [])) {
-      for (const f of FIELDS) {
-        if (k[f] !== newVersion) { k[f] = newVersion; changed = true; }
+    function bindDragSource(src, ignoreButtons){
+      var dragging=false, sx=0, sy=0, ox=0, oy=0;
+      function down(e){
+        if (e.button !== undefined && e.button !== 0) return;
+        if (ignoreButtons && e.target && e.target.closest && e.target.closest('button')) return;
+        var p = e.touches ? e.touches[0] : e;
+        dragging = true; sx = p.clientX; sy = p.clientY;
+        var r = box.getBoundingClientRect(); ox = r.left; oy = r.top;
+        var cs = getComputedStyle(box);
+        if (cs.right !== 'auto') { box.style.left = r.left + 'px'; box.style.top = r.top + 'px'; box.style.right = 'auto'; }
+        e.preventDefault();
       }
+      function move(e){
+        if (!dragging) return;
+        var p = e.touches ? e.touches[0] : e;
+        var nx = Math.max(0, Math.min(innerWidth  - box.offsetWidth,  ox + (p.clientX - sx)));
+        var ny = Math.max(0, Math.min(innerHeight - box.offsetHeight, oy + (p.clientY - sy)));
+        box.style.left = nx + 'px';
+        box.style.top  = ny + 'px';
+      }
+      function up(){ if (dragging) saveActivityBoxPos(box); dragging = false; }
+
+      src.addEventListener('mousedown',  down, { passive:false });
+      window.addEventListener('mousemove', move, { passive:false });
+      window.addEventListener('mouseup',   up,   { passive:true });
+      src.addEventListener('touchstart',  down, { passive:false });
+      window.addEventListener('touchmove', move, { passive:false });
+      window.addEventListener('touchend',  up,   { passive:true });
     }
 
-    if (changed) await ghSave(FILE, data, sha);
-  }
-}
+    bindDragSource(head, true);
+    bindDragSource(dragDecor, false);
 
-// === DamnBruh shard polling & usernames (ADD) ===============================
-// Poll these 6 shards every 5s (server-side only; client never hits /players)
-const DB_SHARDS = ['us-1','us-5','us-20','eu-1','eu-5','eu-20'];
-
-// Per-shard cache: { updatedAt, players[], top[] }
-const dbShardCache = Object.fromEntries(
-  DB_SHARDS.map(k => [k, { updatedAt: 0, players: [], top: [] }])
-);
-
-function dbToGamePlayersUrl(serverKey) {
-  const [region, num] = serverKey.split('-'); // "us-1" -> ["us","1"]
-  return `https://damnbruh-game-server-instance-${num}-${region}.onrender.com/players`;
-}
-function dbRegion(serverKey) { return serverKey.startsWith('us-') ? 'US' : 'EU'; }
-function nowMs() { return Date.now(); }
-
-// --- Activity timeline helpers ---
-function ensureActivityPlayer(privyId) {
-  if (!__USERNAME_MAPPING__.players[privyId]) {
-    __USERNAME_MAPPING__.players[privyId] = {
-      realName: undefined,
-      usernames: {},
-      topUsernames: [],
-      regionCounts: { US:0, EU:0 },
-      topRegion: null,
-      firstSeen: Date.now(),
-      lastSeen: 0,
-      sessions: [],  // NEW
-      pings: []      // NEW
-    };
-  }
-  const p = __USERNAME_MAPPING__.players[privyId];
-  if (!Array.isArray(p.sessions)) p.sessions = [];
-  if (!Array.isArray(p.pings))    p.pings    = [];
-  return p;
-}
-function trimOldSessions(p) {
-  const cutoff = nowMs() - RETAIN_MS;
-  p.sessions = (p.sessions||[]).filter(s => (s.end ?? s.start) >= cutoff);
-}
-function recordActivity(privyId, now, joinTime) {
-  const p = ensureActivityPlayer(privyId);
-  const last = p.sessions[p.sessions.length - 1];
-  const firstTimeSeen = !last && !p.lastSeenActivity;
-  const startMs = (firstTimeSeen && Number.isFinite(joinTime)) ? Number(joinTime) : now;
-  if (!last) {
-    p.sessions.push({ start: startMs, end: now });
-  } else if ((now - p.lastSeenActivity) > INACTIVITY_MS) {
-    p.sessions.push({ start: Math.min(startMs, now), end: now });
-  } else {
-    last.end = now;
-  }
-  compactTailSessions(p);
-  trimOldSessions(p);
-  p.lastSeenActivity = now;
-}
-
-function recordPing(privyId, username, region, ts){
-  const p = ensureActivityPlayer(privyId);
-  const t = Number(ts) || Date.now();
-  trimOld(p, t);
-  if (!Array.isArray(p.pings)) p.pings = [];
-  p.pings.push({
-    ts: t,
-    username: typeof username === 'string' ? username.slice(0,48) : '',
-    region: typeof region === 'string' ? region : undefined
-  });
-}
-
-
-function compactTailSessions(p){
-  if (!p || !Array.isArray(p.sessions) || p.sessions.length < 2) return;
-
-  const a = p.sessions;
-  const n = a.length;
-  const A = a[n - 2];
-  const B = a[n - 1];
-
-  const Aend   = Number(A.end ?? A.start);
-  const Bstart = Number(B.start);
-  const Bend   = Number(B.end ?? B.start);
-  if (!Number.isFinite(Aend) || !Number.isFinite(Bstart) || !Number.isFinite(Bend)) return;
-
-  // Merge if the gap between A and B is less than INACTIVITY_MS
-  if ((Bstart - Aend) < INACTIVITY_MS) {
-    A.end = Math.max(Aend, Bend);
-    a.pop();
-  }
-}
-
-
-
-// Binning
-const WINDOW_SPECS = {
-  '1h': { binMs:  5 * 60 * 1000, count: 12 },
-  '1d': { binMs: 60 * 60 * 1000, count: 24 },
-  '1w': { binMs: 12 * 60 * 60 * 1000, count: 14 },
-  '1m': { binMs: 24 * 60 * 60 * 1000, count: 30 },
-};
-
-
-
-function makeBinsAndMeta(p, windowKey, tzOffsetMin){
-  const spec = WINDOW_SPECS[windowKey] || WINDOW_SPECS["1h"];
-  const now = Date.now();
-  const startMs = alignWindowStart(now, spec.binMs, spec.count, tzOffsetMin);
-  const endMs = startMs + spec.count * spec.binMs;
-
-  // sessions → on/off bins
-  const bins = new Uint8Array(spec.count);
-  const sessions = Array.isArray(p.sessions) ? p.sessions : [];
-  for (const s of sessions) {
-    const a = Math.max(s.start, startMs);
-    const b = Math.min((s.end ?? s.start), endMs);
-    if (b <= a) continue;
-    let i = Math.max(0, Math.floor((a - startMs) / spec.binMs));
-    let j = Math.min(spec.count - 1, Math.floor((b - 1 - startMs) / spec.binMs));
-    for (let k=i;k<=j;k++) bins[k] = 1;
-  }
-
-  // pings → meta per bin
-  const meta = Array.from({ length: spec.count }, () => ({
-    topUsername: undefined,
-    pings: 0,
-    topRegion: undefined,
-    topRegionPings: 0,
-  }));
-  const pings = Array.isArray(p.pings) ? p.pings : [];
-  for (const x of pings) {
-    if (x.ts < startMs || x.ts >= endMs) continue;
-    const idx = Math.floor((x.ts - startMs) / spec.binMs);
-    const m = meta[idx];
-    m.pings += 1;
-    if (x.username){ m._u = m._u || {}; m._u[x.username] = (m._u[x.username] || 0) + 1; }
-    if (x.region){   m._r = m._r || {}; m._r[x.region]   = (m._r[x.region]   || 0) + 1; }
-  }
-  for (const m of meta) {
-    if (m._u){ let bu="",bc=-1; for (const [u,c] of Object.entries(m._u)) if (c>bc){ bc=c; bu=u; } m.topUsername = bu || undefined; delete m._u; }
-    if (m._r){ let br="",bc=-1; for (const [r,c] of Object.entries(m._r)) if (c>bc){ bc=c; br=r; } m.topRegion = br || undefined; m.topRegionPings = Math.max(0,bc); delete m._r; }
-  }
-
-  return { startMs, binMs: spec.binMs, bins: Array.from(bins).join(""), meta };
-}
-
-
-
-// Load usernames file to memory (compatible with your existing schema)
-let dbUsernamesMem = loadUserFile();
-let dbDirty = false;
-
-async function dbPollShard(serverKey) {
-  try {
-    const rsp = await fetch(dbToGamePlayersUrl(serverKey), { method: 'GET' });
-    if (!rsp.ok) throw new Error(`HTTP ${rsp.status}`);
-
-    const data = await rsp.json();
-
-    // ✅ handle both shapes: top-level array OR { players: [...] }
-    const playersRaw = Array.isArray(data) ? data
-                      : (Array.isArray(data.players) ? data.players : []);
-
-    // ✅ your spec: keep real DIDs, non-anon names, size > 2
-    const filtered = playersRaw.filter(p => {
-      const did  = typeof p?.privyId === 'string' && p.privyId.startsWith('did:privy:');
-      const name = (p?.name || '').trim();
-      const size = Number(p?.size) || 0;
-      return did && name && !/^anonymous player$/i.test(name) && size > 2;
+    box.querySelector('#ub-activity-close').onclick=function(){ box.remove(); };
+    Array.prototype.forEach.call(box.querySelectorAll('button[data-k]'), function(b){
+      b.onclick = function(){
+        saveActivityBoxPos(box);
+        ACT_WINDOW = b.dataset.k;
+        showActivityBox(privyId, displayLabel);
+      };
     });
 
-    // ✅ your spec: monetaryValue > 0, sort high → low
-    const top = filtered
-      .filter(p => (Number(p?.monetaryValue) || 0) > 0)
-      .sort((a, b) => (Number(b?.monetaryValue) || 0) - (Number(a?.monetaryValue) || 0))
-      
-      .map((p, i) => ({
-    privyId: p.privyId,
-    name: (p.name || '').trim(),
-    size: Number(p.size) || 0,
-    monetaryValue: Number(p.monetaryValue) || 0,
-    joinTime: Number(p.joinTime) || undefined,
-    rank: i + 1
-  }));
-// record session + a ping for mv>0 players
-const ts = Date.now();
-const region = serverKey.startsWith('us-') ? 'US' : 'EU';
-for (const p of top) {
-  recordActivity(p.privyId, ts, p.joinTime);
-  recordPing(p.privyId, p.name, region, ts);
-}
-// feed mapping so icons can render
-for (const p of filtered) {
-  const id   = p.privyId;
-  const name = (p.name || '').trim();
-  if (id && name && !/^anonymous player$/i.test(name)) {
-    const regionLabel = dbRegion(serverKey); // "US" or "EU"
-    recordUsername({ privyId: id, username: name, region: regionLabel });
-    dbDirty = true;
-    __JOIN_BUFFER__.push({ privyId: id, username: name, region: regionLabel });
-  }
-}
+    restoreActivityBoxPos(box);
 
-await fsp.writeFile(
-  USERNAMES_FILE_PATH,
-  JSON.stringify(__USERNAME_MAPPING__, null, 2)
-);
+    (function drawImmediate(){
+      var spec = ACT_SPECS[ACT_WINDOW] || { binMs: 5*60*1000, count:12 };
+      var _wrap = box.querySelector('#ub-activity-cvs');
+      var _start = alignWindowStartLocal(Date.now(), spec.binMs, spec.count);
+      var _bins = ''.padStart(spec.count, '0');
+      drawLargeWithPattern(_wrap, _bins, _start, spec.binMs);
+      attachTimelineHover(box, _wrap, _start, spec.binMs, null, _bins);
+    })();
 
-    // ✅ keep filtered (for debugging) and top (for clients)
-    dbShardCache[serverKey] = {
-      updatedAt: Date.now(),
-      players: filtered,
-      top
-    };
-  } catch (e) {
-    console.error('[poll]', serverKey, e?.message || e);
-  }
-}
+    fetchActivity([privyId]).then(({data, meta, startMs, binMs})=>{
+  const _wrap = box.querySelector('#ub-activity-cvs');
+  const _bins = (data && data[privyId]) ? data[privyId] : ''.padStart(12,'0');
+  const _meta = (meta && meta[privyId]) ? meta[privyId] : null;
 
+  drawLargeWithPattern(_wrap, _bins, startMs, binMs);
+  attachTimelineHover(box, _wrap, startMs, binMs, _meta, _bins);
 
-// Poll all shards every 5s (fire-and-forget)
-setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
-
-// Persist usernames every 15s; keep polling/caching between writes
-setInterval(() => {
-  if (!dbDirty) return;
-  if (saveUserFile(dbUsernamesMem)) dbDirty = false;
-}, 15000);
-
-await fsp.mkdir(DATA_DIR, { recursive: true }).catch(() => {});
-try {
-  const raw = await fsp.readFile(USERNAMES_FILE_PATH, "utf8");
-  const j = JSON.parse(raw);
-  if (j && typeof j === "object") {
-    __USERNAME_MAPPING__.players   = j.players || {};
-    __USERNAME_MAPPING__.updatedAt = j.updatedAt || Date.now();
-  }
-} catch {
-  // first boot: write an empty file
-  await fsp.writeFile(
-    USERNAMES_FILE_PATH,
-    JSON.stringify(__USERNAME_MAPPING__, null, 2)
-  );
-}
-// Backfill region fields for old records (idempotent)
-for (const p of Object.values(__USERNAME_MAPPING__.players || {})) {
-  if (!p.regionCounts) p.regionCounts = { US: 0, EU: 0 };
-  const us = Number(p.regionCounts.US || 0);
-  const eu = Number(p.regionCounts.EU || 0);
-  p.topRegion = (us >= eu) ? 'US' : 'EU';
-}
-
-// Record a single username event into in-memory map
-function recordUsername({ privyId, username, realName, region }) {
-  if (!privyId || !username) return;
-
-  const id  = String(privyId);
-  const nm  = String(username).slice(0, 48);
-  const rnm = realName ? String(realName).slice(0, 64) : null;
-
-  if (!__USERNAME_MAPPING__.players[id]) {
-    __USERNAME_MAPPING__.players[id] = {
-      realName: rnm || undefined,
-      usernames: {},
-      topUsernames: [],
-      regionCounts: { US: 0, EU: 0 }, // NEW
-      topRegion: null,                // NEW
-      firstSeen: Date.now(),
-      lastSeen: 0,
-    };
-  }
-  const p = __USERNAME_MAPPING__.players[id];
-
-  if (rnm) p.realName = rnm;
-
-  // username counts
-  p.usernames[nm] = (p.usernames[nm] || 0) + 1;
-
-  // region counts (only US/EU accepted)
-  if (!p.regionCounts) p.regionCounts = { US: 0, EU: 0 };
-  if (region === 'US' || region === 'EU') {
-    p.regionCounts[region] = (p.regionCounts[region] || 0) + 1;
+  console.log('[ACT:box] ok', { window: ACT_WINDOW, id: privyId, binsLen: _bins.length, hasMeta: !!_meta });
+}).catch((e)=>{ console.warn('[ACT:box] fail', e); });
   }
 
-  // compute topRegion on every write (ties → US by default)
-  const us = Number(p.regionCounts.US || 0);
-  const eu = Number(p.regionCounts.EU || 0);
-  p.topRegion = (us >= eu) ? 'US' : 'EU';
-
-  // top 3 usernames cache
-  p.topUsernames = Object.entries(p.usernames)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([name, count]) => ({ name, count }));
-
-  p.lastSeen = Date.now();
-}
-
-
-// Flush buffer to disk atomically
-async function flushUsernamesNow() {
-  if (__IS_FLUSHING__) return false;
-  __IS_FLUSHING__ = true;
-  try {
-    if (__JOIN_BUFFER__.length) {
-      for (const evt of __JOIN_BUFFER__) recordUsername(evt);
-      __JOIN_BUFFER__ = [];
-    }
-    __USERNAME_MAPPING__.updatedAt = Date.now();
-
-    const tmp = USERNAMES_FILE_PATH + ".tmp";
-    const json = JSON.stringify(__USERNAME_MAPPING__, null, 2);
-    await fsp.writeFile(tmp, json);
-    await fsp.rename(tmp, USERNAMES_FILE_PATH);   // atomic swap
-    return true;
-  } finally { __IS_FLUSHING__ = false; }
-}
-
-// Schedule 15s periodic flush
-setInterval(flushUsernamesNow, 15000); // not 15_000
-
-
-// === Read-only endpoints (client consumes these) ============================
-// GET /api/game/leaderboard?serverKey=us-1
-app.get('/api/game/leaderboard', (req, res) => {
-  const serverKey = String(req.query.serverKey || '');
-  if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
-  const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
-  const stale = nowMs() - (snap.updatedAt || 0) > 8000;
-  res.json({ ok:true, serverKey, updatedAt: snap.updatedAt || 0, stale, entries: snap.top || [] });
-});
-// GET /api/overlay/activity
-app.get("/api/overlay/activity", (req, res) => {
-  try {
-    const privyId     = String(req.query.privyId || "");
-    const windowKey   = String(req.query.window || "1h");
-    const tzOffsetMin = Number(req.query.tzOffsetMin || 0);
-    const spec        = WINDOW_SPECS[windowKey] || WINDOW_SPECS["1h"];
-    const p           = __USERNAME_MAPPING__.players[privyId];
-    const startMs     = alignWindowStart(Date.now(), spec.binMs, spec.count, tzOffsetMin);
-
-    if (!p) {
-      return res.json({ ok:true, privyId, window:windowKey, startMs, binMs:spec.binMs,
-                        bins: "".padStart(spec.count, "0"),
-                        meta: Array.from({length:spec.count}, ()=>({})) });
-    }
-    const out = makeBinsAndMeta(p, windowKey, tzOffsetMin);
-    res.json({ ok:true, privyId, window:windowKey, ...out });
-  } catch (e) {
-    res.status(500).json({ ok:false, error: e?.message || String(e) });
+  function resolveServerKey() {
+    var sid = new URLSearchParams(location.search).get('serverId') || '';
+    var m = sid.match(/^(us|eu)-(1|5|20)/i);
+    var region = m ? m[1].toLowerCase() : 'us';
+    var amount = m ? m[2] : '1';
+    return { region: region, amount: amount, serverKey: region + '-' + amount };
   }
-});
+  function parseServerId() {
+    var sid = new URLSearchParams(location.search).get('serverId') || '';
+    var m = sid.match(/^(us|eu)-(1|5|20)\b/i);
+    if (m) return { region: m[1].toLowerCase(), amount: m[2] };
+    return { region: 'us', amount: '1' };
+  }
+  function playersEndpoint() {
+    var s = parseServerId();
+    return 'https://damnbruh-game-server-instance-' + s.amount + '-' + s.region + '.onrender.com/players';
+  }
+  function normalizeFilterSort(arr) {
+    var out = [];
+    for (var i=0;i<arr.length;i++) {
+      var p = arr[i];
 
+      var name =
+        (typeof p.name === 'string' && p.name) ? p.name :
+        (typeof p.username === 'string' && p.username) ? p.username :
+        (typeof p.playerName === 'string' && p.playerName) ? p.playerName :
+        '#' + (i + 1);
 
-// POST /api/overlay/activity/batch
-app.post("/api/overlay/activity/batch", express.json(), (req, res) => {
-  try {
-    const body = req.body || {};
-    let ids = Array.isArray(body.ids) ? body.ids : [];
-    ids = ids.filter(x => typeof x === "string" && x.length > 0).slice(0, 50);
+      var privyId =
+        (p.privyId != null) ? p.privyId :
+        (p.id != null) ? p.id :
+        (p.playerId != null) ? p.playerId : null;
 
-    const windowKey   = String(req.query.window || body.window || "1h");
-    const tzOffsetMin = Number(req.query.tzOffsetMin || body.tzOffsetMin || 0);
-    const spec = WINDOW_SPECS[windowKey] || WINDOW_SPECS["1h"];
+      var sRaw = (p.size != null ? p.size : (p.snakeSize != null ? p.snakeSize : (p.length != null ? p.length : 0)));
+      var mvRaw = (p.monetaryValue != null ? p.monetaryValue : (p.value != null ? p.value : (p.money != null ? p.money : (p.cash != null ? p.cash : 0))));
 
-    const data = {};
-    const meta = {};
-    for (const id of ids) {
-      const p = __USERNAME_MAPPING__.players[id];
-      if (!p) {
-        data[id] = "".padStart(spec.count, "0");
-        meta[id] = Array.from({ length: spec.count }, () => ({}));
-      } else {
-        const out = makeBinsAndMeta(p, windowKey, tzOffsetMin);
-        data[id] = out.bins;
-        meta[id] = out.meta;
+      var sizeNum = Number(sRaw); if (!isFinite(sizeNum)) sizeNum = 0;
+      var mvNum   = Number(mvRaw); if (!isFinite(mvNum))   mvNum   = 0;
+
+      if (mvNum > 0 && sizeNum > 2) {
+        out.push({ name: name, privyId: privyId, size: sizeNum, monetaryValue: mvNum });
       }
     }
-    const startMs = alignWindowStart(Date.now(), spec.binMs, spec.count, tzOffsetMin);
-    res.json({ ok:true, window:windowKey, startMs, binMs: spec.binMs, data, meta });
-  } catch (e) {
-    res.status(500).json({ ok:false, error: e?.message || String(e) });
-  }
-});
-
-
-
-// GET /api/game/usernames?serverKey=us-1
-app.get('/api/game/usernames', (req, res) => {
-  const serverKey = String(req.query.serverKey || '');
-  if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
-  res.json({ ok:true, serverKey, updatedAt: nowMs(), usernames: dbUsernamesMem });
-});
-
-// Paths
-
-
-// ---------- App config ----------
-
-// app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
-
-
-
-
-const MAPPING_FILE = path.join(DATA_DIR, "mapping.json");
-
-let mapping = { players: {} };
-function timeAgo(isoDate) {
-  const diff = Date.now() - new Date(isoDate).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min${mins !== 1 ? "s" : ""} ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hour${hrs !== 1 ? "s" : ""} ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days} day${days !== 1 ? "s" : ""} ago`;
-}
-
-
-
-// Load mapping on startup
-try {
-  if (fs.existsSync(MAPPING_FILE)) {
-    mapping = JSON.parse(fs.readFileSync(MAPPING_FILE, "utf-8"));
-    console.log("✅ Loaded mapping from disk");
-  } else {
-    console.log("🆕 No mapping file found — starting fresh");
-  }
-} catch (e) {
-  console.error("❌ Failed to load mapping:", e);
-}
-
-
-app.post("/api/user/admin/set-name", express.json(), async (req, res) => {
-  try {
-    const { did, name } = req.body || {};
-    if (!did || !did.startsWith("did:privy:") || !name) {
-      return res.status(400).json({ ok:false, error:"invalid_input" });
-    }
-    const clean = String(name).trim().slice(0, 64);
-
-    // ensure player exists in the in-memory map
-    const p = (__USERNAME_MAPPING__.players[did] ||= {
-      realName: null,
-      usernames: {},
-      topUsernames: [],
-      firstSeen: Date.now(),
-      lastSeen: 0
+    out.sort(function(a,b){
+      return (b.monetaryValue||0)-(a.monetaryValue||0) || (b.size||0)-(a.size||0) || String(a.name||'').localeCompare(String(b.name||''));
     });
-
-    p.realName = clean;
-    __USERNAME_MAPPING__.updatedAt = Date.now();
-
-    // persist immediately so the file and memory match
-    await flushUsernamesNow();
-
-    res.json({ ok:true, did, realName: p.realName });
-  } catch (e) {
-    console.error("set-name:", e);
-    res.status(500).json({ ok:false, error:"flush_failed" });
+    return out;
   }
-});
 
-// Save periodically (every 60s)
-setInterval(() => {
-  try {
-    fs.writeFileSync(MAPPING_FILE, JSON.stringify(mapping, null, 2));
-  } catch (e) {
-    console.error("❌ Failed to save mapping:", e);
+  function ensureAlertStyles() {
+    if (document.getElementById('db-alert-style')) return;
+    var s = document.createElement('style');
+    s.id = 'db-alert-style';
+    s.textContent = "\
+.db-alerts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:2147483647}\
+.db-alert{background:#000;color:#fff;border:2px solid #ffd400;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.35);width:min(340px,92vw);padding:12px 14px;white-space:pre-wrap;word-break:break-word;opacity:0;transform:translateY(8px);transition:opacity .25s ease, transform .25s ease}\
+.db-alert.show{opacity:1;transform:translateY(0)}\
+.db-alert.hide{opacity:0;transform:translateY(6px)}\
+.db-alert-title{font-weight:700;letter-spacing:.3px;margin-bottom:6px;align-items:center;color:#ffd400}\
+.db-alert-body{font:13px ui-monospace, Menlo, Consolas, monospace;line-height:1.35;align-items:center}\
+@media (max-width:480px){.db-alert{right:8px;bottom:8px}}";
+    document.head.appendChild(s);
   }
-}, 60000);
-
-// Disk-only mapping (single source of truth)
-app.get("/api/user/mapping", (req, res) => {
-  res.json(__USERNAME_MAPPING__);
-});
-app.get("/api/user/core/download", (req, res) => {
-  try {
-    if (!fs.existsSync(CORE_PATH)) return res.status(404).json({ ok:false, error:"core_missing" });
-    const etag = fileSha256Hex(CORE_PATH);
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
-    res.setHeader("ETag", etag);
-    res.sendFile(CORE_PATH);
-  } catch (err) {
-    console.error("download:", err);
-    res.status(500).json({ ok:false, error:"download_failed" });
+  function dbAlertContainer(){
+    var c = document.querySelector('.db-alerts');
+    if (!c){ c = document.createElement('div'); c.className = 'db-alerts'; document.body.appendChild(c); }
+    return c;
   }
-});
-
-app.post("/api/user/record", jsonBody, (req, res) => {
-  const body = req.body || {};
-  const arr = Array.isArray(body)
-    ? body
-    : Array.isArray(body.events)
-    ? body.events
-    : [body];
-
-  let queued = 0;
-  for (const e of arr) {
-    if (!e) continue;
-    const privyId = e.privyId || e.id || e.playerId;
-    const username = e.username || e.name;
-    const realName = e.realName;
-    if (privyId && username) {
-      __JOIN_BUFFER__.push({ privyId, username, realName });
-      queued++;
+  function dbShowAlertToast(msg){
+    var card = document.createElement('div');
+    card.className = 'db-alert';
+    var title = document.createElement('div'); title.className = 'db-alert-title'; title.textContent = 'ALERT:';
+    var body  = document.createElement('div'); body.className  = 'db-alert-body';  body.textContent  = String(msg || '');
+    card.appendChild(title); card.appendChild(body);
+    dbAlertContainer().appendChild(card);
+    requestAnimationFrame(function(){ card.classList.add('show'); });
+    function hide(){ card.classList.add('hide'); setTimeout(function(){ card.remove(); }, 450); }
+    var timer = setTimeout(hide, 5500);
+    card.addEventListener('click', function(){ clearTimeout(timer); hide(); }, { once:true });
+  }
+  function dbGetClientKey(){
+    try{
+      var rawLS = localStorage.getItem('damnbruh_username_keys');
+      var rawGM = (typeof GM_getValue==='function') ? GM_getValue('damnbruh_username_keys', null) : null;
+      var raw = (rawLS != null ? rawLS : rawGM);
+      if (raw){
+        var obj = (typeof raw==='string') ? JSON.parse(raw) : raw;
+        if (obj && typeof obj.username_script_key==='string' && obj.username_script_key) return obj.username_script_key;
+      }
+    }catch(e){}
+    return null;
+  }
+  function dbSeenStore(get){
+    var k='db_seen_alerts_v1';
+    if (get){
+      try{ return JSON.parse(localStorage.getItem(k) || '{}'); }catch(e){return{}}
+    } else {
+      return {
+        add:function(uid){ try{
+          var m = dbSeenStore(true); m[uid]=Date.now();
+          var entries = Object.entries(m).sort(function(a,b){return a[1]-b[1]}).slice(-200);
+          localStorage.setItem('db_seen_alerts_v1', JSON.stringify(Object.fromEntries(entries)));
+        }catch(e){} }
+      };
     }
   }
-  res.json({ ok: true, queued });
-});
-
-const VERSION_PATH = path.join(__dirname, "version.json");
-
-
-app.get("/api/user/core/meta", (req, res) => {
-  try {
-    const sha256 = fileSha256Hex(CORE_PATH);
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
-    res.json({ ok: true, activeVersion: ACTIVE_VERSION, sha256 });
-  } catch (err) {
-    console.error("meta:", err);
-    res.status(500).json({ ok: false, error: "meta_read_failed" });
+  function dbAlertUid(a){
+    var cand = (a && (a.id||a.uuid||a.uid||a.ts||a.timestamp||a.time||a.createdAt||a.expiresAt||a.message)) || Math.random();
+    return String(cand).slice(0,128);
   }
-});
-
-
-app.post("/api/user/admin/flush-now", jsonBody, async (req, res) => {
-  const token = req.header("x-admin-token");
-  if (token !== (process.env.ADMIN_TOKEN || "vibran2566")) {
-    return res.status(401).json({ ok: false, error: "unauthorized" });
-  }
-  try {
-    const ok = await flushUsernamesNow();
-    res.json({ ok: true, flushed: !!ok, updatedAt: __USERNAME_MAPPING__.updatedAt });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
-// 🕐 username join queue
-app.get("/api/user/debug/state", async (req, res) => {
-  try {
-    let size = 0, mtime = null;
+  var DB_LAST_ALERT_TS = Number(localStorage.getItem('db_last_alert_ts_v1') || 0);
+  async function dbPollAlerts() {
+    var key = dbGetClientKey();
+    if (!key) return;
     try {
-      const st = await fsp.stat(USERNAMES_FILE_PATH);
-      size = st.size; mtime = st.mtime;
-    } catch {}
-    res.json({
-      bufferQueued: __JOIN_BUFFER__.length,
-      mappingCount: Object.keys(__USERNAME_MAPPING__.players || {}).length,
-      updatedAt: __USERNAME_MAPPING__.updatedAt || null,
-      file: { path: USERNAMES_FILE_PATH, size, mtime }
+      var res = await fetch(USER_API_BASE + '/alerts?key=' + encodeURIComponent(key), { cache: 'no-store' });
+      if (!res.ok) return;
+      var j = await res.json().catch(function(){ return null; });
+      var arr = (j && Array.isArray(j.alerts)) ? j.alerts : (Array.isArray(j) ? j : []);
+      if (!arr.length) return;
+
+      var seen = dbSeenStore(true);
+      var incoming = [];
+      var maxTs = DB_LAST_ALERT_TS;
+
+      for (var ai=0; ai<arr.length; ai++) {
+        var a = arr[ai];
+        var uid = dbAlertUid(a);
+        var ts  = Number(a.id || a.timestamp || 0) || 0;
+        if (ts > maxTs) maxTs = ts;
+        if (!seen[uid] && ts > DB_LAST_ALERT_TS) incoming.push({ a: a, uid: uid, ts: ts });
+      }
+      incoming.sort(function(x,y){ return (x.ts||0)-(y.ts||0); });
+      for (var bi=0; bi<incoming.length; bi++) {
+        var rec = incoming[bi];
+        if (rec.a && rec.a.message) dbShowAlertToast(rec.a.message);
+        dbSeenStore().add(rec.uid);
+        if (rec.ts > DB_LAST_ALERT_TS) DB_LAST_ALERT_TS = rec.ts;
+      }
+      if (maxTs > DB_LAST_ALERT_TS) DB_LAST_ALERT_TS = maxTs;
+      localStorage.setItem('db_last_alert_ts_v1', String(DB_LAST_ALERT_TS));
+    } catch (e) {}
+  }
+
+  let INFO_BOX = null, INFO_HEADER = null, INFO_BODY = null;
+  function createUsernameInfoBox() {
+    if (INFO_BOX && INFO_BOX.isConnected) return INFO_BOX;
+    var box = document.createElement("div");
+    box.id = "username-info-box";
+    Object.assign(box.style, {
+      position:"fixed", zIndex:2147483647, left:"16px", top:"16px",
+      padding:"12px 14px", paddingTop:"19px", minWidth:"160px",
+      fontFamily:'ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace',
+      fontSize:"13px", color:"#fff", background:"rgba(0,0,0,.65)", backdropFilter:"blur(6px)",
+      border:"1px solid rgba(255,255,255,.12)", borderRadius:"12px", boxShadow:"0 6px 18px rgba(0,0,0,.35)", opacity:"1"
     });
-  } catch (e) {
-    res.status(500).json({ ok:false, error:String(e) });
+    box.innerHTML = '\
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;user-select:none;">\
+        <div style="display:flex;align-items:center;gap:10px;">\
+          <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 10px rgba(34,197,94,.9)"></div>\
+          <div id="username-info-header" style="opacity:.9;letter-spacing:.06em;font-weight:700">Unknown</div>\
+        </div>\
+        <button id="username-info-close" style="background:none;border:none;color:#fff;opacity:.7;cursor:pointer;font-size:13px;">✖</button>\
+      </div>\
+      <div id="username-info-body" style="display:grid;grid-template-columns:1fr auto;row-gap:6px;column-gap:10px;"></div>\
+    ';
+    var drag = document.createElement("div");
+    drag.className = "db-top-drag";
+    box.appendChild(drag);
+    document.body.appendChild(box);
+
+    var dragging=false,sx=0,sy=0,ox=0,oy=0;
+    function down(e){ var p=e.touches?e.touches[0]:e; dragging=true; sx=p.clientX; sy=p.clientY; var r=box.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault();}
+    function move(e){ if(!dragging) return; var p=e.touches?e.touches[0]:e; var nx=Math.max(0,Math.min(innerWidth-40, ox+(p.clientX-sx))); var ny=Math.max(0,Math.min(innerHeight-40, oy+(p.clientY-sy))); box.style.left=nx+"px"; box.style.top=ny+"px"; }
+    function up(){ dragging=false; saveInfoBoxPos(); }
+    drag.addEventListener("mousedown", down);
+    drag.addEventListener("touchstart", down, { passive: false });
+    addEventListener("mousemove", move, { passive: false });
+    addEventListener("touchmove", move, { passive: false });
+    addEventListener("mouseup", up, { passive: true });
+    addEventListener("touchend", up, { passive: true });
+
+    INFO_BOX   = box;
+    INFO_HEADER= box.querySelector("#username-info-header");
+    INFO_BODY  = box.querySelector("#username-info-body");
+    box.querySelector("#username-info-close").addEventListener("click", hideUsernameInfo);
+
+    restoreInfoBoxPos();
+    return box;
   }
-});
-// flush queued joins to GitHub every 2 min 30 sec
-
-
-// ---------- GitHub helpers ----------
-async function ghLoad(filePath, fallback = {}) {
-  const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github+json" },
-  });
-  if (!res.ok) {
-    if (res.status === 404) return { data: fallback, sha: null };
-    throw new Error(`GitHub read failed: ${res.status}`);
+  function restoreInfoBoxPos(){
+    try{
+      var saved = JSON.parse(localStorage.getItem("username_info_box_pos") || "{}");
+      if (saved.left && saved.top && INFO_BOX) Object.assign(INFO_BOX.style, { left:saved.left, top:saved.top });
+    } catch (e) {}
   }
-  const json = await res.json();
-  const content = Buffer.from(json.content, "base64").toString();
-  let data;
-  try { data = JSON.parse(content); } catch { data = fallback; }
-  return { data, sha: json.sha };
-}
-
-async function ghSave(filePath, data, sha) {
-  const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`;
-  const body = {
-    message: `Update ${filePath} via combined server`,
-    content: Buffer.from(JSON.stringify(data, null, 2)).toString("base64"),
-    sha: sha || undefined,
-  };
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github+json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`GitHub push failed (${res.status})`);
-}
-
-function genKey() {
-  return "KEY-" + Math.random().toString(36).substring(2, 10).toUpperCase();
-}
-
-
-
-
-
-
-
-// 🕓 flush queued joins every 2 min 30 sec
-
-
-/* =======================================================
-   =============== SIZE SYSTEM (default) ==================
-   ======================================================= */
-
-// list / add / revoke / validate / register
-app.get("/api/admin/list-keys", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok: false, error: "unauthorized" });
-  try {
-    const { data } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
-    res.json(data);
-  } catch (err) {
-    console.error("list-keys:", err);
-    res.status(500).json({ ok: false, error: "read_failed" });
+  function saveInfoBoxPos(){
+    if (!INFO_BOX) return;
+    var snapshot = { left: INFO_BOX.style.left, top: INFO_BOX.style.top };
+    localStorage.setItem("username_info_box_pos", JSON.stringify(snapshot));
   }
-});
-app.post("/api/admin/delete-key", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok:false, error:"unauthorized" });
-
-  const { key } = req.body || {};
-  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
-
-  try {
-    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
-    const before = data.keys.length;
-    data.keys = data.keys.filter(k => k.key !== key);
-    await ghSave(GITHUB_FILE_PATH, data, sha);
-    res.json({ ok:true, removed: before - data.keys.length });
-  } catch (err) {
-    console.error("delete-key:", err);
-    res.status(500).json({ ok:false, error:"write_failed" });
-  }
-});
-// 🔔 Admin-only broadcast alert
-app.post("/api/admin/alert", async (req, res) => {
-  const { target, key, message } = req.body || {};
-
-  // ✅ Require admin token
-  const adminToken = req.headers["admin-token"];
-  if (adminToken !== ADMIN_TOKEN)
-    return res.status(403).json({ ok: false, error: "unauthorized" });
-
-  if (!message)
-    return res.status(400).json({ ok: false, error: "missing_message" });
-
-  const FILE = "/data/alerts.json";
-  const alertObj = {
-    id: Date.now(),
-    target, // "all" or "key"
-    key,
-    message,
-    createdAt: new Date().toISOString(),
-  };
-
-  let alerts = [];
-  try {
-    if (fs.existsSync(FILE)) alerts = JSON.parse(fs.readFileSync(FILE, "utf8"));
-  } catch (err) {
-    console.error("Failed to load alerts.json:", err);
-  }
-
-  alerts.push(alertObj);
-
-  try {
-    fs.writeFileSync(FILE, JSON.stringify(alerts, null, 2));
-    res.json({ ok: true, alert: alertObj });
-  } catch (err) {
-    console.error("Failed to save alert:", err);
-    res.status(500).json({ ok: false, error: "save_failed" });
-  }
-});
-// Admin: cleanup usernames in-memory and persist to /data
-app.post('/api/user/admin/cleanup-now', async (req, res) => {
-  if (req.header('admin-token') !== ADMIN_TOKEN) {
-    return res.status(401).json({ ok:false, error:'unauthorized' });
-  }
-  try {
-    const players = (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === 'object')
-      ? __USERNAME_MAPPING__.players : {};
-
-    const AN = /^\s*anonymous\s+player\s*$/i;
-    let removedPending = 0, removedRegion = 0, removedAnon = 0, filteredTop = 0, pruned = 0;
-
-    // Remove ALL pending:* (collect first to avoid mutation while iterating)
-    for (const k of Object.keys(players)) {
-      if (k.startsWith('pending:')) { delete players[k]; removedPending++; }
-    }
-
-    // Per-player cleanup
-    const prune = [];
-    for (const [k, p] of Object.entries(players)) {
-      if (!p || typeof p !== 'object') { prune.push(k); continue; }
-
-      // Drop legacy Region (keep topRegion, regionCounts)
-      if (Object.prototype.hasOwnProperty.call(p, 'Region')) { delete p.Region; removedRegion++; }
-
-      // Remove "Anonymous Player" from usernames (any case/spacing)
-      const u = (p.usernames && typeof p.usernames === 'object') ? p.usernames : {};
-      for (const name of Object.keys(u)) {
-        if (AN.test(name)) { delete u[name]; removedAnon++; }
+  function showUsernameInfo(mapInfo){
+    var box = createUsernameInfoBox();
+    var headerText = (mapInfo && mapInfo.realName) ? mapInfo.realName : "Unknown";
+    var usernames = (mapInfo && (mapInfo.allUsernames || mapInfo.usernames)) || {};
+    var sorted = Object.entries(usernames).sort(function(a,b){return b[1]-a[1]}).slice(0,3);
+    INFO_HEADER.textContent = headerText;
+    INFO_BODY.replaceChildren();
+    if (sorted.length === 0) {
+      var none = document.createElement("div");
+      none.textContent = "No usernames recorded.";
+      none.style.opacity = ".7";
+      none.style.gridColumn = "1 / -1";
+      INFO_BODY.appendChild(none);
+    } else {
+      for (var i=0;i<sorted.length;i++) {
+        var name = sorted[i][0], count = sorted[i][1];
+        var n = document.createElement("div"); n.textContent = name;
+        var c = document.createElement("div"); c.style.color = "#4ade80"; c.style.fontWeight = "700"; c.textContent = count;
+        INFO_BODY.appendChild(n); INFO_BODY.appendChild(c);
       }
-      p.usernames = u;
-
-      // Recompute topUsernames from usernames, ensure no Anonymous in top
-      const top = Object.entries(u)
-        .filter(([,v]) => typeof v === 'number' && v > 0)
-        .sort((a,b) => b[1]-a[1])
-        .slice(0,3)
-        .map(([name, count]) => ({ name, count }));
-      const before = Array.isArray(p.topUsernames) ? p.topUsernames.length : 0;
-      p.topUsernames = top.filter(t => !AN.test(t.name));
-      filteredTop += Math.max(0, before - p.topUsernames.length);
-
-      // Prune empties (no usernames and no realName)
-      const hasReal = !!(p.realName && String(p.realName).trim());
-      if (!hasReal && Object.keys(u).length === 0) prune.push(k);
     }
-    for (const k of prune) { delete players[k]; pruned++; }
-
-    __USERNAME_MAPPING__.players = players;
-    __USERNAME_MAPPING__.updatedAt = Date.now();
-
-    // Persist to /data
-    await flushUsernamesNow();
-
-    res.json({ ok:true, stats:{
-      removedPending, removedRegion, removedAnon, filteredTop, pruned,
-      total: Object.keys(players).length
-    }});
-  } catch (e) {
-    res.status(500).json({ ok:false, error: String(e) });
   }
-});
-
-app.post("/api/admin/unuse-key", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok:false, error:"unauthorized" });
-
-  const { key } = req.body || {};
-  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
-
-  try {
-    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
-
-    found.used = false;
-    delete found.usedAt;
-    delete found.boundProof;
-
-    await ghSave(GITHUB_FILE_PATH, data, sha);
-    res.json({ ok:true, message:`${key} reset to unused` });
-  } catch (err) {
-    console.error("unuse-key:", err);
-    res.status(500).json({ ok:false, error:"write_failed" });
+  function hideUsernameInfo(){
+    if (!INFO_BOX || !INFO_BOX.isConnected) return;
+    INFO_BOX.parentNode.removeChild(INFO_BOX);
+    INFO_BOX = INFO_HEADER = INFO_BODY = null;
   }
-});
 
-app.post("/api/admin/add-keys", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok: false, error: "unauthorized" });
-  const count = req.body.count || 1;
-  try {
-    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
-    for (let i = 0; i < count; i++) {
-      data.keys.push({
-        key: genKey(),
-        used: false,
-        revoked: false,
-        createdAt: new Date().toISOString(),
-      });
+  function injectStyles() {
+    if (document.getElementById('dbk-styles-usernames')) return;
+    var s = document.createElement('style');
+    s.id = 'dbk-styles-usernames';
+    s.textContent = "\
+#username-leaderboard{position:fixed;z-index:2147483646;left:16px;top:16px;width:220px;color:#fff;background:rgba(0,0,0,.75);border:1px solid rgba(255,255,255,.12);border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.35);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.35;padding:10px 12px 8px;backdrop-filter:blur(6px)}\
+#username-leaderboard-header{position:relative;padding-top:14px;text-align:left;font-weight:700;letter-spacing:.06em;margin-bottom:8px;padding-left:28px}\
+#username-leaderboard-header::before{content:'';position:absolute;width:10px;height:10px;left:5px;top:17.5px;background:#22c55e;border-radius:50%;box-shadow:0 0 6px #22c55e}\
+.ub-top-drag{width:44px;position:absolute;top:-1px;left:50%;transform:translateX(-50%);height:8px;border-radius:6px;background:rgba(255,255,255,.12);cursor:move;box-shadow:0 0 10px rgba(0,0,0,.8)}\
+.ub-row{display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-top:1px solid rgba(255,255,255,.08)}\
+.ub-row:first-of-type{border-top:none}\
+.ub-left{display:flex;align-items:center;gap:6px;min-width:0}\
+.ub-rank{color:#fff;opacity:.9;font-weight:700}\
+.ub-medal{font-size:12px}\
+.ub-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}\
+.ub-hint{color:#4ade80;font-weight:600;font-size:12px;margin-left:8px}\
+.ub-footer{margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12);font-size:12px;display:flex;align-items:center;justify-content:space-between;opacity:.7}\
+.ub-top3-wrap{position:relative;margin-left:6px}\
+.ub-top3-icon{cursor:pointer;font-size:11px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:4px;padding:0 4px;line-height:1.2}\
+.ub-top3-popup{position:absolute;left:50%;transform:translateX(-50%);top:120%;min-width:160px;background:rgba(0,0,0,.92);color:#fff;border:1px solid rgba(255,255,255,.16);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.7);padding:8px;font-size:11px;display:none;z-index:99999;white-space:normal}\
+.ub-top3-title{font-weight:700;margin-bottom:4px;opacity:.9}\
+.ub-top3-line{display:flex;justify-content:space-between;gap:6px}\
+.ub-top3-name{max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\
+.ub-top3-count{color:#4ade80;font-weight:600}\
+.ub-top3-wrap:hover .ub-top3-popup{display:block}\
+.db-top-drag{position:absolute; top:6px; left:50%; transform:translateX(-50%); width:44px; height:8px; border-radius:6px; background:rgba(255,255,255,.12); cursor:move; z-index:2; box-shadow:0 0 10px rgba(0,0,0,.8);}\
+#ub-status{opacity:.88} #ub-ver{opacity:.75}\
+#ub-activity-box { padding-top: 28px; }\
+";
+    document.head.appendChild(s);
+  }
+
+  function ensureBox() {
+    injectStyles();
+
+    LB_BOX = document.getElementById('username-leaderboard') || LB_BOX;
+
+    if (!LB_BOX) {
+      LB_BOX = document.createElement('div');
+      LB_BOX.id = 'username-leaderboard';
+      LB_BOX.innerHTML = '\
+        <div id="username-leaderboard-header">\
+          <div class="ub-top-drag"></div>\
+          TRUE LEADERBOARD\
+        </div>\
+        <div id="ub-body"></div>\
+        <div class="ub-footer"><span id="ub-status">Starting…</span><span id="ub-ver">dev</span></div>\
+      ';
+      document.body.appendChild(LB_BOX);
+      restoreLeaderboardPos();
     }
-    await ghSave(GITHUB_FILE_PATH, data, sha);
-    res.json({ ok: true, added: count });
-  } catch (err) {
-    console.error("add-keys:", err);
-    res.status(500).json({ ok: false, error: "write_failed" });
+
+    LB_BODY  = LB_BOX.querySelector('#ub-body');
+    LB_STATUS= LB_BOX.querySelector('#ub-status');
+    LB_VER   = LB_BOX.querySelector('#ub-ver');
+    if (LB_VER) LB_VER.textContent = UI_VER;
+
+    var pill = LB_BOX.querySelector('.ub-top-drag');
+    if (!pill.__dragBound__) {
+      var dragging=false,sx=0,sy=0,ox=16,oy=16;
+      function down(e){ dragging=true; var p=e.touches?e.touches[0]:e; sx=p.clientX; sy=p.clientY; var r=LB_BOX.getBoundingClientRect(); ox=r.left; oy=r.top; e.preventDefault(); }
+      function move(e){ if(!dragging) return; var p=e.touches?e.touches[0]:e; var nx=Math.max(0,Math.min(innerWidth-40,  ox+(p.clientX-sx))); var ny=Math.max(0,Math.min(innerHeight-40, oy+(p.clientY-sy))); LB_BOX.style.left=nx+'px'; LB_BOX.style.top=ny+'px'; }
+      function up(){ dragging=false; saveLeaderboardPos(); }
+      pill.addEventListener('mousedown',down,{passive:false});
+      addEventListener('mousemove',move,{passive:false});
+      addEventListener('mouseup',up,{passive:true});
+      pill.addEventListener('touchstart',down,{passive:false});
+      addEventListener('touchmove',move,{passive:false});
+      addEventListener('touchend',up,{passive:true});
+      pill.__dragBound__ = true;
+    }
   }
-});
-
-app.post("/api/admin/revoke", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok: false, error: "unauthorized" });
-  const { key } = req.body;
-  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
-  try {
-    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok: false, error: "not_found" });
-    found.revoked = true;
-    await ghSave(GITHUB_FILE_PATH, data, sha);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("revoke:", err);
-    res.status(500).json({ ok: false, error: "write_failed" });
+  function row(textLeft, rankText){
+    if (rankText == null) rankText = '-';
+    var row = document.createElement('div'); row.className = 'ub-row';
+    var left = document.createElement('div'); left.className = 'ub-left';
+    var rnk = document.createElement('div'); rnk.className = 'ub-rank'; rnk.textContent = rankText;
+    var nm  = document.createElement('div'); nm.className = 'ub-name'; nm.textContent = textLeft;
+    left.appendChild(rnk); left.appendChild(nm); row.appendChild(left);
+    var right = document.createElement('div'); right.className = 'ub-hint'; right.textContent = '';
+    row.appendChild(right);
+    return row;
   }
-});
+  function restoreLeaderboardPos(){
+    try{
+      var saved = JSON.parse(localStorage.getItem("leaderboard_box_pos") || "{}");
+      if (saved.left && saved.top && LB_BOX) Object.assign(LB_BOX.style, { left:saved.left, top:saved.top });
+    } catch (e) {}
+  }
+  function saveLeaderboardPos(){
+    if (!LB_BOX) return;
+    var snapshot = { left: LB_BOX.style.left, top: LB_BOX.style.top };
+    localStorage.setItem("leaderboard_box_pos", JSON.stringify(snapshot));
+  }
 
-app.post("/api/validate", async (req, res) => {
-  const { key, proof } = req.body || {};
-  if (!key)
-    return res.status(400).json({ ok: false, error: "missing_key" });
+  function render(players, mapping) {
+    if (!LB_BOX || !LB_BOX.isConnected) return;
+    mapping = mapping || __MAP__;
+    var map = (mapping && mapping.players) ? mapping.players : {};
+    LB_BODY.replaceChildren();
 
-  try {
-    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
+    var notInGame = !location.pathname.includes('/game');
+    if (notInGame) {
+      LB_BODY.appendChild(row('No lobby found', '-'));
+      if (LB_STATUS) LB_STATUS.textContent = 'Not in Game';
+      if (LB_VER) LB_VER.textContent = UI_VER;
+      return;
+    }
 
-    if (!found)
-      return res.status(404).json({ ok: false, error: "not_found" });
-    if (found.revoked)
-      return res.status(403).json({ ok: false, error: "revoked" });
+    var list = (Array.isArray(players) ? players : [])
+      .filter(function(p){ return (p && (p.monetaryValue||0) > 0 && (p.size||0) > 2); })
+      .sort(function(a,b){ return (b.monetaryValue||0) - (a.monetaryValue||0); });
+    __LAST_TOP__ = list;
 
-    if (!found.used)
-      return res.status(200).json({ ok: true, usable: true, used: false });
+    if (list.length === 0) {
+      LB_BODY.appendChild(row('No players found', '-'));
+      if (LB_STATUS) LB_STATUS.textContent = '0 players online';
+      if (LB_VER) LB_VER.textContent = UI_VER;
+      return;
+    }
 
-    if (found.boundProof && proof && proof === found.boundProof) {
-      // ✅ Add lastUsedAt and save using the correct sha
-      try {
-        found.lastUsedAt = new Date().toISOString();
-        await ghSave(GITHUB_FILE_PATH, data, sha); // now includes sha
-      } catch (err) {
-        console.error("Failed to update lastUsedAt:", err);
+    list.forEach(function(p, i){
+      var medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
+      var r = document.createElement('div'); r.className = 'ub-row';
+      var left = document.createElement('div'); left.className = 'ub-left';
+      var ms = document.createElement('div'); ms.className = i<3?'ub-medal':'ub-rank'; ms.textContent = medal;
+
+      var info = (p.privyId && map[p.privyId]) ? map[p.privyId] : null;
+      var displayName = (info && info.realName) ? (info.realName + ' (' + (p.name||'') + ')') : (p.name || ('#' + (i+1)));
+      var nm = document.createElement('div'); nm.className = 'ub-name'; nm.textContent = displayName;
+
+      left.appendChild(ms); left.appendChild(nm);
+
+      if (info && Array.isArray(info.topUsernames) && info.topUsernames.length){
+        var wrap = document.createElement('div'); wrap.className='ub-top3-wrap';
+        var icon = document.createElement('div'); icon.className='ub-top3-icon'; icon.textContent='🛈';
+        var popup = document.createElement('div'); popup.className='ub-top3-popup';
+        popup.innerHTML = '<div class="ub-top3-title">Top Usernames:</div>' +
+          info.topUsernames.map(function(u){
+            return '<div class="ub-top3-line"><div class="ub-top3-name">'+u.name+'</div><div class="ub-top3-count">('+u.count+')</div></div>';
+          }).join('');
+        wrap.appendChild(icon); wrap.appendChild(popup);
+        icon.addEventListener('click', function(e){ e.stopPropagation(); showUsernameInfo(info); });
+        left.appendChild(wrap);
       }
 
-      return res.status(200).json({ ok: true, valid: true, bound: true, used: true });
-    }
+      (function(){
+        var actWrap = document.createElement('div'); actWrap.className='ub-activity-wrap';
+        actWrap.style.cssText='display:flex;align-items:center;gap:6px;margin-left:6px';
+        var actIcon = document.createElement('div'); actIcon.className='ub-activity-icon';
+        actIcon.textContent = '▦';
+        actIcon.style.cssText='cursor:pointer;font-size:11px;background:rgba(255,255,255,.16);border-radius:4px;padding:0 4px;line-height:1.2';
+        actIcon.title = 'Show play timeline';
+        actIcon.addEventListener('click', function(e){ e.stopPropagation(); showActivityBox(p.privyId, (p.name||'Player')); });
+        actWrap.appendChild(actIcon);
+        left.appendChild(actWrap);
+      })();
 
-    return res.status(409).json({ ok: false, used: true, error: "bound_mismatch" });
+      r.appendChild(left);
+      var right = document.createElement('div'); right.className = 'ub-hint'; right.textContent = '';
+      r.appendChild(right);
+      LB_BODY.appendChild(r);
+    });
 
-  } catch (err) {
-    console.error("validate:", err);
-    res.status(500).json({ ok: false, error: "read_failed" });
+    if (LB_STATUS) LB_STATUS.textContent = list.length + ' player' + (list.length===1?'':'s') + ' online';
+    if (LB_VER) LB_VER.textContent = UI_VER;
   }
-});
-// === Core update endpoints ===
 
-// Serve current version
-
-
-app.get("/api/core/version", (req, res) => {
-  res.json({ version: ACTIVE_VERSION });
-});
-
-app.post("/api/core/bump", (req, res) => {
-  // auth: choose one. If you want x-admin-token:
-  const hdr = req.headers["x-admin-token"];
-  if (hdr !== ADMIN_TOKEN) return res.status(403).json({ error: "unauthorized" });
-
-  const { version } = req.body || {};
-  if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) {
-    return res.status(400).json({ error: "invalid version format (x.y.z)" });
+  async function fetchLeaderboard() {
+    var sk = resolveServerKey();
+    var url = GAME_API_BASE + '/api/game/leaderboard?serverKey=' + encodeURIComponent(sk.serverKey);
+    var res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('leaderboard ' + res.status);
+    var j = await res.json();
+    var entries = Array.isArray(j.entries) ? j.entries : [];
+    var filtered = entries
+      .filter(function(p){ return (p && p.name) && (p.monetaryValue||0) > 0 && (p.size||0) > 2; })
+      .sort(function(a,b){ return (b.monetaryValue||0) - (a.monetaryValue||0); });
+    return filtered;
   }
-  // must be higher
-  const toNum = v => v.split(".").map(Number);
-  const [a,b,c] = toNum(ACTIVE_VERSION);
-  const [x,y,z] = toNum(version);
-  const newer = x>a || (x===a && (y>b || (y===b && z>c)));
-  if (!newer) return res.status(400).json({ error: "version must be higher than current" });
-
-  ACTIVE_VERSION = version;
-  console.log(`✅ CORE activeVersion -> ${ACTIVE_VERSION}`);
-  res.json({ ok:true, activeVersion: ACTIVE_VERSION });
-});
-
-
-
-
-
-app.post("/api/register", async (req, res) => {
-  const { key, proof } = req.body || {};
-  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
-  if (!proof) return res.status(400).json({ ok:false, error:"missing_proof" });
-  try {
-    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
-    if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
-    if (found.used) {
-      if (found.boundProof && proof === found.boundProof)
-        return res.json({ ok:true, used:true, bound:true, already:true });
-      return res.status(409).json({ ok:false, used:true, error:"already_used" });
-    }
-    found.used = true;
-    found.usedAt = new Date().toISOString();
-    found.boundProof = String(proof);
-    await ghSave(GITHUB_FILE_PATH, data, sha);
-    res.json({ ok:true, used:true, bound:true });
-  } catch (err) {
-    console.error("register:", err);
-    res.status(500).json({ ok:false, error:"write_failed" });
+  async function fetchMapping() {
+    var res = await fetch(USER_API_BASE + '/mapping', { cache: 'no-store' });
+    if (!res.ok) return { players: {} };
+    var j = await res.json().catch(function(){ return {}; });
+    return (j && j.players) ? j : { players: {} };
   }
-});
 
-/* =======================================================
-   =============== USERNAME SYSTEM (new) =================
-   ======================================================= */
-
-// license routes: same behavior but prefixed /api/user/*
-app.get("/api/user/admin/list-keys", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok:false, error:"unauthorized" });
-  try {
-    const { data } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
-    res.json(data);
-  } catch (err) {
-    console.error("user-list:", err);
-    res.status(500).json({ ok:false, error:"read_failed" });
+  function tick() {
+    ensureBox();
+    if (!location.pathname.includes('/game')) { render([], __MAP__); return; }
+    fetchLeaderboard().then(function(entries){ render(entries, __MAP__); }).catch(function(e){ console.warn('[LB] tick error:', e); render([]); });
   }
-});
-app.post("/api/admin/add-note", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok: false, error: "unauthorized" });
 
-  const { key, note } = req.body || {};
-  if (!key || typeof note !== "string")
-    return res.status(400).json({ ok: false, error: "missing_fields" });
+  function start() {
+    ensureAlertStyles();
+    setTimeout(dbPollAlerts, 1200);
+    setInterval(dbPollAlerts, 10000);
 
-  try {
-    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
-    if (!found)
-      return res.status(404).json({ ok: false, error: "not_found" });
-
-    found.note = note.trim();
-    await ghSave(GITHUB_FILE_PATH, data, sha);
-    res.json({ ok: true, message: `Note added to ${key}` });
-  } catch (err) {
-    console.error("add-note:", err);
-    res.status(500).json({ ok: false, error: "write_failed" });
+    tick();
+    TICK = setInterval(tick, 5000);
+    startActivityRefreshLoop(function(){ return __LAST_TOP__; });
+    MAP_INT = setInterval(async function () {
+      try { __MAP__ = await fetchMapping(); } catch (e) {}
+    }, 7000);
   }
-});
 
-
-app.post("/api/user/admin/add-keys", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok:false, error:"unauthorized" });
-  const count = req.body.count || 1;
-  try {
-    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
-    for (let i=0;i<count;i++){
-      data.keys.push({ key:genKey(), used:false, revoked:false, createdAt:new Date().toISOString() });
-    }
-    await ghSave(USERKEYS_FILE_PATH, data, sha);
-    res.json({ ok:true, added:count });
-  } catch(err){ console.error("user-add:",err); res.status(500).json({ok:false,error:"write_failed"}); }
-});
-app.post("/api/user/admin/delete-key", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok:false, error:"unauthorized" });
-
-  const { key } = req.body || {};
-  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
-
-  try {
-    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
-    const before = data.keys.length;
-    data.keys = data.keys.filter(k => k.key !== key);
-    await ghSave(USERKEYS_FILE_PATH, data, sha);
-    res.json({ ok:true, removed: before - data.keys.length });
-  } catch (err) {
-    console.error("user-delete-key:", err);
-    res.status(500).json({ ok:false, error:"write_failed" });
+  function stop() {
+    if (TICK) { clearInterval(TICK); TICK = null; }
+    if (MAP_INT) { clearInterval(MAP_INT); MAP_INT = null; }
+    if (LB_BOX && LB_BOX.parentNode) LB_BOX.remove();
+    LB_BOX = LB_BODY = LB_STATUS = LB_VER = null;
   }
-});
-app.post("/api/user/admin/unuse-key", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok:false, error:"unauthorized" });
 
-  const { key } = req.body || {};
-  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+  window.__USERNAME_TRACKER__ = { stop: stop, endpoint: playersEndpoint, version: UI_VER };
 
-  try {
-    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
-
-    found.used = false;
-    delete found.usedAt;
-    delete found.boundProof;
-
-    await ghSave(USERKEYS_FILE_PATH, data, sha);
-    res.json({ ok:true, message:`${key} reset to unused` });
-  } catch (err) {
-    console.error("user-unuse-key:", err);
-    res.status(500).json({ ok:false, error:"write_failed" });
-  }
-});
-app.post("/api/user/admin/add-note", async (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok:false, error:"unauthorized" });
-
-  const { key, note } = req.body || {};
-  if (!key || typeof note !== "string")
-    return res.status(400).json({ ok:false, error:"missing_fields" });
-
-  try {
-    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
-    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
-
-    found.note = note.trim();
-    await ghSave(USERKEYS_FILE_PATH, data, sha);
-    res.json({ ok:true, message:`Note added to ${key}` });
-  } catch (err) {
-    console.error("user-add-note:", err);
-    res.status(500).json({ ok:false, error:"write_failed" });
-  }
-});
-app.post("/api/user/admin/delete-player", (req, res) => {
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok:false, error:"unauthorized" });
-
-  const { privyId } = req.body || {};
-  if (!privyId) return res.status(400).json({ ok:false, error:"missing_privyId" });
-
-  const data = loadUserFile();
-  if (!data.players || !data.players[privyId])
-    return res.status(404).json({ ok:false, error:"not_found" });
-
-  delete data.players[privyId];
-  saveUserFile(data);
-  res.json({ ok:true, message:`Deleted ${privyId}` });
-});
-
-app.post("/api/user/admin/revoke", async (req,res)=>{
-  if (req.header("admin-token")!==ADMIN_TOKEN)
-    return res.status(401).json({ok:false,error:"unauthorized"});
-  const {key}=req.body;
-  if(!key)return res.status(400).json({ok:false,error:"missing_key"});
-  try{
-    const {data,sha}=await ghLoad(USERKEYS_FILE_PATH,{keys:[]});
-    const found=data.keys.find(k=>k.key===key);
-    if(!found)return res.status(404).json({ok:false,error:"not_found"});
-    found.revoked=true;
-    await ghSave(USERKEYS_FILE_PATH,data,sha);
-    res.json({ok:true});
-  }catch(err){console.error("user-revoke:",err);res.status(500).json({ok:false,error:"write_failed"});}
-});
-
-app.post("/api/user/validate", async (req, res) => {
-  const { key, proof } = req.body || {};
-  if (!key)
-    return res.status(400).json({ ok: false, error: "missing_key" });
-
-  try {
-    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
-    const found = data.keys.find(k => k.key === key);
-
-    if (!found)
-      return res.status(404).json({ ok: false, error: "not_found" });
-    if (found.revoked)
-      return res.status(403).json({ ok: false, error: "revoked" });
-
-    if (!found.used)
-      return res.status(200).json({ ok: true, usable: true, used: false });
-
-    if (found.boundProof && proof && proof === found.boundProof) {
-      // ✅ same logic: update lastUsedAt and save
-      try {
-        found.lastUsedAt = new Date().toISOString();
-        await ghSave(USERKEYS_FILE_PATH, data, sha);
-      } catch (err) {
-        console.error("Failed to update lastUsedAt (user):", err);
-      }
-
-      return res.status(200).json({ ok: true, valid: true, bound: true, used: true });
-    }
-
-    return res.status(409).json({ ok: false, used: true, error: "bound_mismatch" });
-
-  } catch (err) {
-    console.error("user-validate:", err);
-    res.status(500).json({ ok: false, error: "read_failed" });
-  }
-});
-
-
-app.post("/api/user/register", async (req,res)=>{
-  const {key,proof}=req.body||{};
-  if(!key)return res.status(400).json({ok:false,error:"missing_key"});
-  if(!proof)return res.status(400).json({ok:false,error:"missing_proof"});
-  try{
-    const {data,sha}=await ghLoad(USERKEYS_FILE_PATH,{keys:[]});
-    const f=data.keys.find(k=>k.key===key);
-    if(!f)return res.status(404).json({ok:false,error:"not_found"});
-    if(f.revoked)return res.status(403).json({ok:false,error:"revoked"});
-    if(f.used){
-      if(f.boundProof&&proof===f.boundProof)
-        return res.json({ok:true,used:true,bound:true,already:true});
-      return res.status(409).json({ok:false,used:true,error:"already_used"});
-    }
-    f.used=true; f.usedAt=new Date().toISOString(); f.boundProof=String(proof);
-    await ghSave(USERKEYS_FILE_PATH,data,sha);
-    res.json({ok:true,used:true,bound:true});
-  }catch(err){console.error("user-register:",err);res.status(500).json({ok:false,error:"write_failed"});}
-});
-app.get("/api/user/alerts", async (req, res) => {
-  const key = req.query.key;
-  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
-
-  try {
-    const alerts = JSON.parse(fs.readFileSync("/data/alerts.json", "utf8"));
-    const visible = alerts.filter(a => a.target === "all" || (a.target === "key" && a.key === key));
-    res.json({ ok:true, alerts: visible });
-  } catch (e) {
-    console.error("alerts:", e);
-    res.status(500).json({ ok:false, alerts: [] });
-  }
-});
-
-// ---------- username tracking ----------
-
-
-
-
-
-
-
-/* =======================================================
-   ================== Default & Start ====================
-   ======================================================= */
-
-app.get("/", (req,res)=>
-  res.send("✅ Combined License + Username Tracker Active")
-);
-
-app.listen(PORT, ()=> console.log(`✅ Combined server running on :${PORT}`));
+  start();
+})();
