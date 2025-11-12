@@ -178,6 +178,17 @@ function recordActivity(privyId, now, joinTime) {
   p.lastSeenActivity = now;
 }
 
+function recordPing(privyId, username, region, ts){
+  const p = ensureActivityPlayer(privyId);
+  const t = Number(ts) || Date.now();
+  trimOld(p, t);
+  if (!Array.isArray(p.pings)) p.pings = [];
+  p.pings.push({
+    ts: t,
+    username: typeof username === 'string' ? username.slice(0,48) : '',
+    region: typeof region === 'string' ? region : undefined
+  });
+}
 
 
 function compactTailSessions(p){
