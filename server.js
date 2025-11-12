@@ -104,10 +104,6 @@ let __JOIN_BUFFER__ = [];                   // events queued between flushes
 let __USERNAME_MAPPING__ = { players: {}, updatedAt: 0 };
 let __IS_FLUSHING__ = false;
 
-// --- Activity timeline constants ---
-const INACTIVITY_MS = 3 * 60 * 1000;           // 3 minutes
-const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // keep 31 days
-
 
 
 function readCoreBytes() {
