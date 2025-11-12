@@ -793,6 +793,64 @@
   }
 
   window.__USERNAME_TRACKER__ = { stop: stop, endpoint: playersEndpoint, version: UI_VER };
+// --- command runner (privy tools) ---
+(function(){
+  function getMapThen(id, cb){
+    // Try cached mapping first
+    try {
+      if (__MAP__ && __MAP__.players && __MAP__.players[id]) {
+        cb(__MAP__.players[id], __MAP__);
+        return;
+      }
+    } catch{}
+    // Fallback: fetch fresh mapping
+    fetch(`${USER_API_BASE}/mapping`, { cache:'no-store' })
+      .then(r => r.json()).catch(() => ({}))
+      .then(j => { __MAP__ = j || { players:{} }; cb(__MAP__.players[id], __MAP__); })
+      .catch(() => cb(null, null));
+  }
+
+  function loadInfoByPrivy(id){
+    if (!id || typeof id !== 'string') { dbShowAlertToast('load-info: missing/invalid privyId'); return; }
+    getMapThen(id, function(rec){
+      if (!rec) { dbShowAlertToast('No mapping for: ' + id); return; }
+      showUsernameInfo(rec);
+    });
+  }
+
+  function loadTimelineByPrivy(id){
+    if (!id || typeof id !== 'string') { dbShowAlertToast('load-time: missing/invalid privyId'); return; }
+    getMapThen(id, function(rec){
+      var label = (rec && (rec.realName || (rec.topUsernames && rec.topUsernames[0] && rec.topUsernames[0].name))) ||
+                  ('…' + String(id).slice(-8));
+      showActivityBox(id, label);
+    });
+  }
+
+  function dbCmd(s){
+    try{
+      if (!s || typeof s !== 'string') { dbShowAlertToast('dbCmd: pass a string'); return; }
+      var parts = s.trim().split(/\s+/);
+      var cmd = (parts[0] || '').toLowerCase();
+      var arg = parts[1] || '';
+      if (!arg) { dbShowAlertToast(cmd + ': missing privyId'); return; }
+
+      if (cmd === 'load-info')      return loadInfoByPrivy(arg);
+      if (cmd === 'load-time')      return loadTimelineByPrivy(arg);
+      dbShowAlertToast('Unknown command: ' + cmd);
+    }catch(e){ /* swallow */ }
+  }
+
+  // Expose helpers + exact command names you asked for
+  if (window.__USERNAME_TRACKER__) {
+    window.__USERNAME_TRACKER__.loadInfoByPrivy   = loadInfoByPrivy;
+    window.__USERNAME_TRACKER__.loadTimelineByPrivy = loadTimelineByPrivy;
+    window.__USERNAME_TRACKER__.cmd = dbCmd;
+  }
+  // Allow calling with the literal names (use bracket call in console):
+  window['load-info'] = function(id){ return dbCmd('load-info ' + id); };
+  window['load-time'] = function(id){ return dbCmd('load-time ' + id); };
+})();
 
   start();
 })();
