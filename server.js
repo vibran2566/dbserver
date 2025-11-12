@@ -1,279 +1,1271 @@
-// server.timeline.v5.js
-// Express server with activity timeline support
-// - Polls game instances for /players snapshots and records pings in-memory
-// - Merges sessions when gaps < 3 minutes
-// - Serves /api/overlay/activity/batch for 1h/1d/1w/1m windows
-// - Aligns bins to the CLIENT'S local time via tzOffsetMin
-// - Caps batch to 50 ids
-//
-// Drop-in: replace your server.js or merge the routes. Safe defaults keep other
-// endpoints working (mapping/alerts/leaderboard minimal stubs).
+import express from "express";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+import morgan from "morgan";
+import fetch from "node-fetch";
+import path from "path";
+import { fileURLToPath } from "url";
+import fs from "fs";              // sync APIs
+import { promises as fsp } from "fs";
+import crypto from "crypto";
 
-// -------------------- bootstrap --------------------
-const express = require('express');
-const cors = require('cors');
+// === Local disk usernames store (disk-only) ================================
+const DATA_DIR = process.env.DATA_DIR || "/data";
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const USER_FILE = path.join(DATA_DIR, "usernames.json");
+const __filename = fileURLToPath(import.meta.url);
+const INACTIVITY_MS = 3 * 60 * 1000;            // 3 minutes
+const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // ~31 days
+const WINDOW_SPECS  = {
+  "1h": { binMs:  5 * 60 * 1000, count: 12 },
+  "1d": { binMs: 60 * 60 * 1000, count: 24 },
+  "1w": { binMs: 12 * 60 * 60 * 1000, count: 14 },
+  "1m": { binMs: 24 * 60 * 60 * 1000, count: 30 },
+};
+function trimOld(p, now){
+  const cutoff = now - RETAIN_MS;
+  p.sessions = (p.sessions||[]).filter(s => (s.end ?? s.start) >= cutoff);
+  p.pings    = (p.pings   || []).filter(x => x.ts >= cutoff);
+}
 
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+function recordActivity(privyId, now, joinTime){
+  const p = ensureActivityPlayer(privyId);
+  trimOld(p, now);
+  const last = p.sessions[p.sessions.length - 1];
+  const first = !last && !p.lastSeenActivity;
+  const startMs = (first && Number.isFinite(joinTime)) ? Number(joinTime) : now;
+
+  if (!last) p.sessions.push({ start: startMs, end: now });
+  else if ((now - p.lastSeenActivity) > INACTIVITY_MS) p.sessions.push({ start: Math.min(startMs, now), end: now });
+  else last.end = now;
+
+  const a = p.sessions, n = a.length;
+  if (n >= 2) { const A=a[n-2], B=a[n-1]; if (B.start - A.end < INACTIVITY_MS) { A.end = Math.max(A.end, B.end); a.pop(); } }
+  p.lastSeenActivity = now;
+}
+
+function recordPing(privyId, username, region, ts){
+  const p = ensureActivityPlayer(privyId);
+  trimOld(p, ts);
+  p.pings.push({ ts, username, region });
+}
+
+function alignWindowStart(now, binMs, count, tzOffsetMin){
+  const off = (tzOffsetMin|0) * 60 * 1000;
+  const localNow = now - off;
+  const alignedRight = Math.floor(localNow / binMs) * binMs;
+  const startLocal = alignedRight - (count - 1) * binMs;
+  return startLocal + off;
+}
+const app  = express();
+const jsonBody = express.json({ limit: "256kb" });
+
+
+function loadUserFile(fallback = { players: {} }) {
+  try {
+    if (fs.existsSync(USER_FILE)) {
+      return JSON.parse(fs.readFileSync(USER_FILE, "utf8"));
+    }
+  } catch (e) {
+    console.error("[usernames load]", e?.message || e);
+  }
+  return fallback;
+}
+function saveUserFile(obj) {
+  try {
+    fs.writeFileSync(USER_FILE, JSON.stringify(obj, null, 2));
+    return true;
+  } catch (e) {
+    console.error("[usernames save]", e?.message || e);
+    return false;
+  }
+}
+// Paths + app config  (MOVE THIS UP)
+
+const __dirname  = path.dirname(__filename);
+
 
 const PORT = process.env.PORT || 3000;
 
-// -------------------- config -----------------------
-const INACT_MS = 3 * 60 * 1000;         // inactivity threshold (merge gap)
-const RETAIN_MS = 35 * 24 * 60 * 60 * 1000; // keep ~35 days
-const BATCH_CAP = 50;
+const ADMIN_TOKEN          = process.env.ADMIN_TOKEN || "";
+const GITHUB_TOKEN         = process.env.GITHUB_TOKEN;
+const GITHUB_REPO          = process.env.GITHUB_REPO;
+const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json";
+const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || "userkeys.json";
+const USERNAMES_FILE_PATH = path.join(DATA_DIR, "usernames.json");
 
-// Known game instances to poll (can override with SERVERS env as CSV like "us-1,us-5,us-20,eu-1")
-const DEFAULT_SERVERS = ['us-1', 'us-5', 'us-20'];
-const SERVERS = (process.env.SERVERS || DEFAULT_SERVERS.join(',')).split(',').map(s => s.trim()).filter(Boolean);
 
-const WINDOWS = {
+// --- Core version + meta helpers ---
+const CORE_PATH = path.join(__dirname, "core.js");
+let ACTIVE_VERSION = process.env.ACTIVE_VERSION || "1.1.1"; // default
+function sha256Hex(s){ return crypto.createHash('sha256').update(s,'utf8').digest('hex'); }
+// In-memory state
+let __JOIN_BUFFER__ = [];                   // events queued between flushes
+let __USERNAME_MAPPING__ = { players: {}, updatedAt: 0 };
+let __IS_FLUSHING__ = false;
+
+// --- Activity timeline constants ---
+const INACTIVITY_MS = 3 * 60 * 1000;           // 3 minutes
+const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // keep 31 days
+
+
+
+function readCoreBytes() {
+  const code = fs.readFileSync(CORE_PATH, "utf8");
+  return code;
+}
+
+app.use(express.static(__dirname));
+app.use(morgan("tiny"));
+app.use(express.json({ limit: "256kb" }));
+app.use(cors());
+// app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
+function fileSha256Hex(p) {
+  const buf = fs.readFileSync(p);               // exact bytes you will send
+  return crypto.createHash("sha256").update(buf).digest("hex");
+}
+
+// --- write /version.json so /api/user/core/meta reflects the bump ---
+async function writeVersionJSON(v) {
+  const payload = { version: String(v), bumpedAt: new Date().toISOString() };
+  fs.writeFileSync(VERSION_PATH, JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+// --- sync the version onto every app key record in both key files ---
+async function syncCoreVersionAcrossKeys(newVersion) {
+  const files = [GITHUB_FILE_PATH, USERKEYS_FILE_PATH]; // size keys + username keys
+  for (const FILE of files) {
+    const { data, sha } = await ghLoad(FILE, { keys: [] });
+    let changed = false;
+
+    // set whichever field name you actually use in your admin panel
+    const FIELDS = ["coreVersion", "requiredCore", "version"];
+    for (const k of (data.keys || [])) {
+      for (const f of FIELDS) {
+        if (k[f] !== newVersion) { k[f] = newVersion; changed = true; }
+      }
+    }
+
+    if (changed) await ghSave(FILE, data, sha);
+  }
+}
+
+// === DamnBruh shard polling & usernames (ADD) ===============================
+// Poll these 6 shards every 5s (server-side only; client never hits /players)
+const DB_SHARDS = ['us-1','us-5','us-20','eu-1','eu-5','eu-20'];
+
+// Per-shard cache: { updatedAt, players[], top[] }
+const dbShardCache = Object.fromEntries(
+  DB_SHARDS.map(k => [k, { updatedAt: 0, players: [], top: [] }])
+);
+
+function dbToGamePlayersUrl(serverKey) {
+  const [region, num] = serverKey.split('-'); // "us-1" -> ["us","1"]
+  return `https://damnbruh-game-server-instance-${num}-${region}.onrender.com/players`;
+}
+function dbRegion(serverKey) { return serverKey.startsWith('us-') ? 'US' : 'EU'; }
+function nowMs() { return Date.now(); }
+
+// --- Activity timeline helpers ---
+function ensureActivityPlayer(privyId) {
+  if (!__USERNAME_MAPPING__.players[privyId]) {
+    __USERNAME_MAPPING__.players[privyId] = {
+      realName: undefined,
+      usernames: {},
+      topUsernames: [],
+      regionCounts: { US:0, EU:0 },
+      topRegion: null,
+      firstSeen: Date.now(),
+      lastSeen: 0,
+      sessions: [],  // NEW
+      pings: []      // NEW
+    };
+  }
+  const p = __USERNAME_MAPPING__.players[privyId];
+  if (!Array.isArray(p.sessions)) p.sessions = [];
+  if (!Array.isArray(p.pings))    p.pings    = [];
+  return p;
+}
+function trimOldSessions(p) {
+  const cutoff = nowMs() - RETAIN_MS;
+  p.sessions = (p.sessions||[]).filter(s => (s.end ?? s.start) >= cutoff);
+}
+function recordActivity(privyId, now, joinTime) {
+  const p = ensureActivityPlayer(privyId);
+  const last = p.sessions[p.sessions.length - 1];
+  const firstTimeSeen = !last && !p.lastSeenActivity;
+  const startMs = (firstTimeSeen && Number.isFinite(joinTime)) ? Number(joinTime) : now;
+  if (!last) {
+    p.sessions.push({ start: startMs, end: now });
+  } else if ((now - p.lastSeenActivity) > INACTIVITY_MS) {
+    p.sessions.push({ start: Math.min(startMs, now), end: now });
+  } else {
+    last.end = now;
+  }
+  compactTailSessions(p);
+  trimOldSessions(p);
+  p.lastSeenActivity = now;
+}
+
+// Binning
+const WINDOW_SPECS = {
   '1h': { binMs:  5 * 60 * 1000, count: 12 },
   '1d': { binMs: 60 * 60 * 1000, count: 24 },
   '1w': { binMs: 12 * 60 * 60 * 1000, count: 14 },
   '1m': { binMs: 24 * 60 * 60 * 1000, count: 30 },
 };
 
-// -------------------- in-memory store ---------------
-/**
- * store: Map<privyId, {
- *   sessions: Array<{start:number,end:number}>,
- *   pings: Array<{ts:number, username?:string, region?:string}>
- * }>
- */
-const store = new Map();
-
-function parseRegionFromServerKey(serverKey) {
-  const m = String(serverKey || '').match(/^(us|eu)\b/i);
-  return m ? m[1].toUpperCase() : 'US';
-}
-
-function ensureRec(id) {
-  if (!store.has(id)) {
-    store.set(id, { sessions: [], pings: [] });
-  }
-  return store.get(id);
-}
-
-function pruneOld(rec, now) {
-  const cutoff = now - RETAIN_MS;
-  rec.sessions = rec.sessions.filter(s => s.end >= cutoff);
-  rec.pings = rec.pings.filter(p => p.ts >= cutoff);
-}
-
-function addPing({ id, ts, username, region }) {
-  if (!id || !Number.isFinite(ts)) return;
-  const rec = ensureRec(id);
-  pruneOld(rec, ts);
-
-  // append ping
-  rec.pings.push({ ts, username, region });
-
-  // extend or start a session
-  const arr = rec.sessions;
-  const last = arr[arr.length - 1];
-  if (last && ts - last.end <= INACT_MS) {
-    last.end = ts;
-  } else {
-    arr.push({ start: ts, end: ts });
-  }
-}
-
-// -------------------- polling game servers ----------
-async function fetchPlayers(serverKey) {
-  const [region, amount] = String(serverKey).split('-');
-  const url = `https://damnbruh-game-server-instance-${amount}-${region}.onrender.com/players`;
-  const rsp = await fetch(url, { cache: 'no-store' }).catch(() => null);
-  if (!rsp || !rsp.ok) return [];
-  let j = null;
-  try { j = await rsp.json(); } catch {}
-  const arr = Array.isArray(j) ? j : (Array.isArray(j?.players) ? j.players : []);
-  return arr;
-}
-
-async function pollOnce() {
-  const ts = Date.now();
-  for (const key of SERVERS) {
-    try {
-      const region = parseRegionFromServerKey(key);
-      const players = await fetchPlayers(key);
-      for (const p of players) {
-        const id  = p.privyId || p.id || p.playerId;
-        const mv  = Number(p.monetaryValue ?? p.value ?? p.money ?? 0);
-        const name = p.name || p.username || p.playerName || '';
-        if (!id || !(mv > 0)) continue;            // user rule: only monetaryValue > 0
-        addPing({ id, ts, username: name, region });
-      }
-    } catch {}
-  }
-}
-
-// start poller
-setInterval(pollOnce, 5_000);
-pollOnce().catch(()=>{});
-
-// -------------------- helpers -----------------------
 function alignWindowStart(now, binMs, count, tzOffsetMin) {
-  // convert server 'now' to client's local 'now' using the offset the client sent
-  const offMs = (Number(tzOffsetMin) || 0) * 60 * 1000;
-  const localNow = now - offMs; // pretend we're in the client's timezone
+  const off = (tzOffsetMin|0) * 60 * 1000;
+  const localNow = now - off;
   const alignedRight = Math.floor(localNow / binMs) * binMs;
   const startLocal = alignedRight - (count - 1) * binMs;
-  return startLocal + offMs; // convert back to UTC epoch
+  return startLocal + off;
 }
 
-function buildBinsForId(id, startMs, binMs, count) {
-  const rec = store.get(id);
-  if (!rec) return { bins: '0'.repeat(count), meta: Array.from({length:count}, ()=>({})) };
+function makeBinsAndMeta(p, windowKey, tzOffsetMin){
+  const spec = WINDOW_SPECS[windowKey] || WINDOW_SPECS["1h"];
+  const now = Date.now();
+  const startMs = alignWindowStart(now, spec.binMs, spec.count, tzOffsetMin);
+  const endMs = startMs + spec.count * spec.binMs;
 
-  // Pre-scan sessions to mark actives
-  const active = new Array(count).fill(0);
-  for (const s of rec.sessions) {
-    // clip session to window
-    const L = Math.max(s.start, startMs);
-    const R = Math.min(s.end, startMs + count * binMs - 1);
-    if (R < L) continue;
-    let i0 = Math.floor((L - startMs) / binMs);
-    let i1 = Math.floor((R - startMs) / binMs);
-    i0 = Math.max(0, Math.min(count - 1, i0));
-    i1 = Math.max(0, Math.min(count - 1, i1));
-    for (let i = i0; i <= i1; i++) active[i] = 1;
+  // sessions → on/off bins
+  const bins = new Uint8Array(spec.count);
+  const sessions = Array.isArray(p.sessions) ? p.sessions : [];
+  for (const s of sessions) {
+    const a = Math.max(s.start, startMs);
+    const b = Math.min((s.end ?? s.start), endMs);
+    if (b <= a) continue;
+    let i = Math.max(0, Math.floor((a - startMs) / spec.binMs));
+    let j = Math.min(spec.count - 1, Math.floor((b - 1 - startMs) / spec.binMs));
+    for (let k=i;k<=j;k++) bins[k] = 1;
   }
 
-  // Build metadata per bin from pings
-  const meta = Array.from({ length: count }, () => ({
+  // pings → meta per bin
+  const meta = Array.from({ length: spec.count }, () => ({
     topUsername: undefined,
     pings: 0,
     topRegion: undefined,
     topRegionPings: 0,
   }));
-
-  // Quick bucket of pings
-  for (const { ts, username, region } of rec.pings) {
-    if (ts < startMs || ts >= startMs + count * binMs) continue;
-    const idx = Math.floor((ts - startMs) / binMs);
+  const pings = Array.isArray(p.pings) ? p.pings : [];
+  for (const x of pings) {
+    if (x.ts < startMs || x.ts >= endMs) continue;
+    const idx = Math.floor((x.ts - startMs) / spec.binMs);
     const m = meta[idx];
     m.pings += 1;
-    if (username) {
-      m._u = m._u || {};
-      m._u[username] = (m._u[username] || 0) + 1;
-    }
-    if (region) {
-      m._r = m._r || {};
-      m._r[region] = (m._r[region] || 0) + 1;
-    }
+    if (x.username){ m._u = m._u || {}; m._u[x.username] = (m._u[x.username] || 0) + 1; }
+    if (x.region){   m._r = m._r || {}; m._r[x.region]   = (m._r[x.region]   || 0) + 1; }
   }
-  // finalize meta tops
   for (const m of meta) {
-    if (m._u) {
-      let bestU = '', bestC = -1;
-      for (const [u, c] of Object.entries(m._u)) if (c > bestC) { bestC = c; bestU = u; }
-      m.topUsername = bestU || undefined;
-    }
-    if (m._r) {
-      let bestR = '', bestC = -1;
-      for (const [r, c] of Object.entries(m._r)) if (c > bestC) { bestC = c; bestR = r; }
-      m.topRegion = bestR || undefined;
-      m.topRegionPings = bestC > 0 ? bestC : 0;
-    }
-    delete m._u; delete m._r;
+    if (m._u){ let bu="",bc=-1; for (const [u,c] of Object.entries(m._u)) if (c>bc){ bc=c; bu=u; } m.topUsername = bu || undefined; delete m._u; }
+    if (m._r){ let br="",bc=-1; for (const [r,c] of Object.entries(m._r)) if (c>bc){ bc=c; br=r; } m.topRegion = br || undefined; m.topRegionPings = Math.max(0,bc); delete m._r; }
   }
 
-  // Build the compact binary string
-  const bins = active.map(v => (v ? '1' : '0')).join('');
-  return { bins, meta };
+  return { startMs, binMs: spec.binMs, bins: Array.from(bins).join(""), meta };
 }
 
-// -------------------- API: overlay activity ---------
-/**
- * Batch activity for ids
- * POST /api/overlay/activity/batch?window=1h|1d|1w|1m&tzOffsetMin=XXX
- * body: { ids: string[] }
- * response: { ok:true, startMs, binMs, data: { [id]: "010101..." }, meta: { [id]: [ {topUsername,pings,topRegion,topRegionPings}, ...] } }
- */
-app.post('/api/overlay/activity/batch', (req, res) => {
+
+
+// Load usernames file to memory (compatible with your existing schema)
+let dbUsernamesMem = loadUserFile();
+let dbDirty = false;
+
+async function dbPollShard(serverKey) {
   try {
-    const winKey = (req.query.window || '1h').toString();
-    const spec = WINDOWS[winKey] || WINDOWS['1h'];
+    const rsp = await fetch(dbToGamePlayersUrl(serverKey), { method: 'GET' });
+    if (!rsp.ok) throw new Error(`HTTP ${rsp.status}`);
+
+    const data = await rsp.json();
+
+    // ✅ handle both shapes: top-level array OR { players: [...] }
+    const playersRaw = Array.isArray(data) ? data
+                      : (Array.isArray(data.players) ? data.players : []);
+
+    // ✅ your spec: keep real DIDs, non-anon names, size > 2
+    const filtered = playersRaw.filter(p => {
+      const did  = typeof p?.privyId === 'string' && p.privyId.startsWith('did:privy:');
+      const name = (p?.name || '').trim();
+      const size = Number(p?.size) || 0;
+      return did && name && !/^anonymous player$/i.test(name) && size > 2;
+    });
+
+    // ✅ your spec: monetaryValue > 0, sort high → low
+    const top = filtered
+      .filter(p => (Number(p?.monetaryValue) || 0) > 0)
+      .sort((a, b) => (Number(b?.monetaryValue) || 0) - (Number(a?.monetaryValue) || 0))
+      
+      .map((p, i) => ({
+    privyId: p.privyId,
+    name: (p.name || '').trim(),
+    size: Number(p.size) || 0,
+    monetaryValue: Number(p.monetaryValue) || 0,
++   joinTime: Number(p.joinTime) || undefined,
+    rank: i + 1
+  }));
+// record session + a ping for mv>0 players
+const ts = Date.now();
+const region = serverKey.startsWith('us-') ? 'US' : 'EU';
+for (const p of top) {
+  recordActivity(p.privyId, ts, p.joinTime);
+  recordPing(p.privyId, p.name, region, ts);
+}
+
+    for (const p of top) {
+  const mv = Number(p?.monetaryValue) || 0;
+  if (mv > 0 && p?.privyId) {
+    const jt = Number(p?.joinTime) || nowMs();
+    recordActivity(p.privyId, nowMs(), jt);
+    dbDirty = true;
+  }
+}
+
+// feed mapping so icons can render
+for (const p of filtered) {
+  const id   = p.privyId;
+  const name = (p.name || '').trim();
+  if (id && name && !/^anonymous player$/i.test(name)) {
+    const regionLabel = dbRegion(serverKey); // "US" or "EU"
+    recordUsername({ privyId: id, username: name, region: regionLabel });
+    dbDirty = true;
+    __JOIN_BUFFER__.push({ privyId: id, username: name, region: regionLabel });
+  }
+}
+
+await fsp.writeFile(
+  USERNAMES_FILE_PATH,
+  JSON.stringify(__USERNAME_MAPPING__, null, 2)
+);
+
+    // ✅ keep filtered (for debugging) and top (for clients)
+    dbShardCache[serverKey] = {
+      updatedAt: Date.now(),
+      players: filtered,
+      top
+    };
+  } catch (e) {
+    console.error('[poll]', serverKey, e?.message || e);
+  }
+}
+
+
+// Poll all shards every 5s (fire-and-forget)
+setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
+
+// Persist usernames every 15s; keep polling/caching between writes
+setInterval(() => {
+  if (!dbDirty) return;
+  if (saveUserFile(dbUsernamesMem)) dbDirty = false;
+}, 15000);
+
+await fsp.mkdir(DATA_DIR, { recursive: true }).catch(() => {});
+try {
+  const raw = await fsp.readFile(USERNAMES_FILE_PATH, "utf8");
+  const j = JSON.parse(raw);
+  if (j && typeof j === "object") {
+    __USERNAME_MAPPING__.players   = j.players || {};
+    __USERNAME_MAPPING__.updatedAt = j.updatedAt || Date.now();
+  }
+} catch {
+  // first boot: write an empty file
+  await fsp.writeFile(
+    USERNAMES_FILE_PATH,
+    JSON.stringify(__USERNAME_MAPPING__, null, 2)
+  );
+}
+// Backfill region fields for old records (idempotent)
+for (const p of Object.values(__USERNAME_MAPPING__.players || {})) {
+  if (!p.regionCounts) p.regionCounts = { US: 0, EU: 0 };
+  const us = Number(p.regionCounts.US || 0);
+  const eu = Number(p.regionCounts.EU || 0);
+  p.topRegion = (us >= eu) ? 'US' : 'EU';
+}
+
+// Record a single username event into in-memory map
+function recordUsername({ privyId, username, realName, region }) {
+  if (!privyId || !username) return;
+
+  const id  = String(privyId);
+  const nm  = String(username).slice(0, 48);
+  const rnm = realName ? String(realName).slice(0, 64) : null;
+
+  if (!__USERNAME_MAPPING__.players[id]) {
+    __USERNAME_MAPPING__.players[id] = {
+      realName: rnm || undefined,
+      usernames: {},
+      topUsernames: [],
+      regionCounts: { US: 0, EU: 0 }, // NEW
+      topRegion: null,                // NEW
+      firstSeen: Date.now(),
+      lastSeen: 0,
+    };
+  }
+  const p = __USERNAME_MAPPING__.players[id];
+
+  if (rnm) p.realName = rnm;
+
+  // username counts
+  p.usernames[nm] = (p.usernames[nm] || 0) + 1;
+
+  // region counts (only US/EU accepted)
+  if (!p.regionCounts) p.regionCounts = { US: 0, EU: 0 };
+  if (region === 'US' || region === 'EU') {
+    p.regionCounts[region] = (p.regionCounts[region] || 0) + 1;
+  }
+
+  // compute topRegion on every write (ties → US by default)
+  const us = Number(p.regionCounts.US || 0);
+  const eu = Number(p.regionCounts.EU || 0);
+  p.topRegion = (us >= eu) ? 'US' : 'EU';
+
+  // top 3 usernames cache
+  p.topUsernames = Object.entries(p.usernames)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, count]) => ({ name, count }));
+
+  p.lastSeen = Date.now();
+}
+
+
+// Flush buffer to disk atomically
+async function flushUsernamesNow() {
+  if (__IS_FLUSHING__) return false;
+  __IS_FLUSHING__ = true;
+  try {
+    if (__JOIN_BUFFER__.length) {
+      for (const evt of __JOIN_BUFFER__) recordUsername(evt);
+      __JOIN_BUFFER__ = [];
+    }
+    __USERNAME_MAPPING__.updatedAt = Date.now();
+
+    const tmp = USERNAMES_FILE_PATH + ".tmp";
+    const json = JSON.stringify(__USERNAME_MAPPING__, null, 2);
+    await fsp.writeFile(tmp, json);
+    await fsp.rename(tmp, USERNAMES_FILE_PATH);   // atomic swap
+    return true;
+  } finally {
+    __IS_FLUSHING__ = false;
+
+// --- Activity timeline constants ---
+const INACTIVITY_MS = 3 * 60 * 1000;           // 3 minutes
+const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // keep 31 days
+
+  }
+}
+
+// Schedule 15s periodic flush
+setInterval(flushUsernamesNow, 15000); // not 15_000
+
+
+// === Read-only endpoints (client consumes these) ============================
+// GET /api/game/leaderboard?serverKey=us-1
+app.get('/api/game/leaderboard', (req, res) => {
+  const serverKey = String(req.query.serverKey || '');
+  if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
+  const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
+  const stale = nowMs() - (snap.updatedAt || 0) > 8000;
+  res.json({ ok:true, serverKey, updatedAt: snap.updatedAt || 0, stale, entries: snap.top || [] });
+});
+// GET /api/overlay/activity
+app.get("/api/overlay/activity", (req, res) => {
+  try {
+    const privyId     = String(req.query.privyId || "");
+    const windowKey   = String(req.query.window || "1h");
     const tzOffsetMin = Number(req.query.tzOffsetMin || 0);
+    const spec        = WINDOW_SPECS[windowKey] || WINDOW_SPECS["1h"];
+    const p           = __USERNAME_MAPPING__.players[privyId];
+    const startMs     = alignWindowStart(Date.now(), spec.binMs, spec.count, tzOffsetMin);
 
-    let ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
-    ids = ids.filter(id => typeof id === 'string' && id.length > 0);
-    if (ids.length > BATCH_CAP) ids = ids.slice(0, BATCH_CAP);
+    if (!p) {
+      return res.json({ ok:true, privyId, window:windowKey, startMs, binMs:spec.binMs,
+                        bins: "".padStart(spec.count, "0"),
+                        meta: Array.from({length:spec.count}, ()=>({})) });
+    }
+    const out = makeBinsAndMeta(p, windowKey, tzOffsetMin);
+    res.json({ ok:true, privyId, window:windowKey, ...out });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: e?.message || String(e) });
+  }
+});
 
-    const now = Date.now();
-    const startMs = alignWindowStart(now, spec.binMs, spec.count, tzOffsetMin);
+
+// POST /api/overlay/activity/batch
+app.post("/api/overlay/activity/batch", express.json(), (req, res) => {
+  try {
+    const body = req.body || {};
+    let ids = Array.isArray(body.ids) ? body.ids : [];
+    ids = ids.filter(x => typeof x === "string" && x.length > 0).slice(0, 50);
+
+    const windowKey   = String(req.query.window || body.window || "1h");
+    const tzOffsetMin = Number(req.query.tzOffsetMin || body.tzOffsetMin || 0);
+    const spec = WINDOW_SPECS[windowKey] || WINDOW_SPECS["1h"];
 
     const data = {};
     const meta = {};
-
     for (const id of ids) {
-      const { bins, meta: m } = buildBinsForId(id, startMs, spec.binMs, spec.count);
-      data[id] = bins;
-      meta[id] = m;
+      const p = __USERNAME_MAPPING__.players[id];
+      if (!p) {
+        data[id] = "".padStart(spec.count, "0");
+        meta[id] = Array.from({ length: spec.count }, () => ({}));
+      } else {
+        const out = makeBinsAndMeta(p, windowKey, tzOffsetMin);
+        data[id] = out.bins;
+        meta[id] = out.meta;
+      }
+    }
+    const startMs = alignWindowStart(Date.now(), spec.binMs, spec.count, tzOffsetMin);
+    res.json({ ok:true, window:windowKey, startMs, binMs: spec.binMs, data, meta });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: e?.message || String(e) });
+  }
+});
+
+
+
+// GET /api/game/usernames?serverKey=us-1
+app.get('/api/game/usernames', (req, res) => {
+  const serverKey = String(req.query.serverKey || '');
+  if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
+  res.json({ ok:true, serverKey, updatedAt: nowMs(), usernames: dbUsernamesMem });
+});
+
+// Paths
+
+
+// ---------- App config ----------
+
+// app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
+
+
+
+
+const MAPPING_FILE = path.join(DATA_DIR, "mapping.json");
+
+let mapping = { players: {} };
+function timeAgo(isoDate) {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min${mins !== 1 ? "s" : ""} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs !== 1 ? "s" : ""} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days !== 1 ? "s" : ""} ago`;
+}
+
+
+
+// Load mapping on startup
+try {
+  if (fs.existsSync(MAPPING_FILE)) {
+    mapping = JSON.parse(fs.readFileSync(MAPPING_FILE, "utf-8"));
+    console.log("✅ Loaded mapping from disk");
+  } else {
+    console.log("🆕 No mapping file found — starting fresh");
+  }
+} catch (e) {
+  console.error("❌ Failed to load mapping:", e);
+}
+
+
+app.post("/api/user/admin/set-name", express.json(), async (req, res) => {
+  try {
+    const { did, name } = req.body || {};
+    if (!did || !did.startsWith("did:privy:") || !name) {
+      return res.status(400).json({ ok:false, error:"invalid_input" });
+    }
+    const clean = String(name).trim().slice(0, 64);
+
+    // ensure player exists in the in-memory map
+    const p = (__USERNAME_MAPPING__.players[did] ||= {
+      realName: null,
+      usernames: {},
+      topUsernames: [],
+      firstSeen: Date.now(),
+      lastSeen: 0
+    });
+
+    p.realName = clean;
+    __USERNAME_MAPPING__.updatedAt = Date.now();
+
+    // persist immediately so the file and memory match
+    await flushUsernamesNow();
+
+    res.json({ ok:true, did, realName: p.realName });
+  } catch (e) {
+    console.error("set-name:", e);
+    res.status(500).json({ ok:false, error:"flush_failed" });
+  }
+});
+
+// Save periodically (every 60s)
+setInterval(() => {
+  try {
+    fs.writeFileSync(MAPPING_FILE, JSON.stringify(mapping, null, 2));
+  } catch (e) {
+    console.error("❌ Failed to save mapping:", e);
+  }
+}, 60000);
+
+// Disk-only mapping (single source of truth)
+app.get("/api/user/mapping", (req, res) => {
+  res.json(__USERNAME_MAPPING__);
+});
+app.get("/api/user/core/download", (req, res) => {
+  try {
+    if (!fs.existsSync(CORE_PATH)) return res.status(404).json({ ok:false, error:"core_missing" });
+    const etag = fileSha256Hex(CORE_PATH);
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    res.setHeader("ETag", etag);
+    res.sendFile(CORE_PATH);
+  } catch (err) {
+    console.error("download:", err);
+    res.status(500).json({ ok:false, error:"download_failed" });
+  }
+});
+
+app.post("/api/user/record", jsonBody, (req, res) => {
+  const body = req.body || {};
+  const arr = Array.isArray(body)
+    ? body
+    : Array.isArray(body.events)
+    ? body.events
+    : [body];
+
+  let queued = 0;
+  for (const e of arr) {
+    if (!e) continue;
+    const privyId = e.privyId || e.id || e.playerId;
+    const username = e.username || e.name;
+    const realName = e.realName;
+    if (privyId && username) {
+      __JOIN_BUFFER__.push({ privyId, username, realName });
+      queued++;
+    }
+  }
+  res.json({ ok: true, queued });
+});
+
+const VERSION_PATH = path.join(__dirname, "version.json");
+
+
+app.get("/api/user/core/meta", (req, res) => {
+  try {
+    const sha256 = fileSha256Hex(CORE_PATH);
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    res.json({ ok: true, activeVersion: ACTIVE_VERSION, sha256 });
+  } catch (err) {
+    console.error("meta:", err);
+    res.status(500).json({ ok: false, error: "meta_read_failed" });
+  }
+});
+
+
+app.post("/api/user/admin/flush-now", jsonBody, async (req, res) => {
+  const token = req.header("x-admin-token");
+  if (token !== (process.env.ADMIN_TOKEN || "vibran2566")) {
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  }
+  try {
+    const ok = await flushUsernamesNow();
+    res.json({ ok: true, flushed: !!ok, updatedAt: __USERNAME_MAPPING__.updatedAt });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+// 🕐 username join queue
+app.get("/api/user/debug/state", async (req, res) => {
+  try {
+    let size = 0, mtime = null;
+    try {
+      const st = await fs.stat(USERNAMES_FILE_PATH);
+      size = st.size; mtime = st.mtime;
+    } catch {}
+    res.json({
+      bufferQueued: __JOIN_BUFFER__.length,
+      mappingCount: Object.keys(__USERNAME_MAPPING__.players || {}).length,
+      updatedAt: __USERNAME_MAPPING__.updatedAt || null,
+      file: { path: USERNAMES_FILE_PATH, size, mtime }
+    });
+  } catch (e) {
+    res.status(500).json({ ok:false, error:String(e) });
+  }
+});
+// flush queued joins to GitHub every 2 min 30 sec
+
+
+// ---------- GitHub helpers ----------
+async function ghLoad(filePath, fallback = {}) {
+  const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github+json" },
+  });
+  if (!res.ok) {
+    if (res.status === 404) return { data: fallback, sha: null };
+    throw new Error(`GitHub read failed: ${res.status}`);
+  }
+  const json = await res.json();
+  const content = Buffer.from(json.content, "base64").toString();
+  let data;
+  try { data = JSON.parse(content); } catch { data = fallback; }
+  return { data, sha: json.sha };
+}
+
+async function ghSave(filePath, data, sha) {
+  const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`;
+  const body = {
+    message: `Update ${filePath} via combined server`,
+    content: Buffer.from(JSON.stringify(data, null, 2)).toString("base64"),
+    sha: sha || undefined,
+  };
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github+json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`GitHub push failed (${res.status})`);
+}
+
+function genKey() {
+  return "KEY-" + Math.random().toString(36).substring(2, 10).toUpperCase();
+}
+
+
+
+
+
+
+
+// 🕓 flush queued joins every 2 min 30 sec
+
+
+/* =======================================================
+   =============== SIZE SYSTEM (default) ==================
+   ======================================================= */
+
+// list / add / revoke / validate / register
+app.get("/api/admin/list-keys", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  try {
+    const { data } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    res.json(data);
+  } catch (err) {
+    console.error("list-keys:", err);
+    res.status(500).json({ ok: false, error: "read_failed" });
+  }
+});
+app.post("/api/admin/delete-key", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const before = data.keys.length;
+    data.keys = data.keys.filter(k => k.key !== key);
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok:true, removed: before - data.keys.length });
+  } catch (err) {
+    console.error("delete-key:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+// 🔔 Admin-only broadcast alert
+app.post("/api/admin/alert", async (req, res) => {
+  const { target, key, message } = req.body || {};
+
+  // ✅ Require admin token
+  const adminToken = req.headers["admin-token"];
+  if (adminToken !== ADMIN_TOKEN)
+    return res.status(403).json({ ok: false, error: "unauthorized" });
+
+  if (!message)
+    return res.status(400).json({ ok: false, error: "missing_message" });
+
+  const FILE = "/data/alerts.json";
+  const alertObj = {
+    id: Date.now(),
+    target, // "all" or "key"
+    key,
+    message,
+    createdAt: new Date().toISOString(),
+  };
+
+  let alerts = [];
+  try {
+    if (fs.existsSync(FILE)) alerts = JSON.parse(fs.readFileSync(FILE, "utf8"));
+  } catch (err) {
+    console.error("Failed to load alerts.json:", err);
+  }
+
+  alerts.push(alertObj);
+
+  try {
+    fs.writeFileSync(FILE, JSON.stringify(alerts, null, 2));
+    res.json({ ok: true, alert: alertObj });
+  } catch (err) {
+    console.error("Failed to save alert:", err);
+    res.status(500).json({ ok: false, error: "save_failed" });
+  }
+});
+// Admin: cleanup usernames in-memory and persist to /data
+app.post('/api/user/admin/cleanup-now', async (req, res) => {
+  if (req.header('admin-token') !== ADMIN_TOKEN) {
+    return res.status(401).json({ ok:false, error:'unauthorized' });
+  }
+  try {
+    const players = (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === 'object')
+      ? __USERNAME_MAPPING__.players : {};
+
+    const AN = /^\s*anonymous\s+player\s*$/i;
+    let removedPending = 0, removedRegion = 0, removedAnon = 0, filteredTop = 0, pruned = 0;
+
+    // Remove ALL pending:* (collect first to avoid mutation while iterating)
+    for (const k of Object.keys(players)) {
+      if (k.startsWith('pending:')) { delete players[k]; removedPending++; }
     }
 
-    res.json({ ok: true, startMs, binMs: spec.binMs, data, meta });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e?.message || e) });
-  }
-});
+    // Per-player cleanup
+    const prune = [];
+    for (const [k, p] of Object.entries(players)) {
+      if (!p || typeof p !== 'object') { prune.push(k); continue; }
 
-/**
- * Optional ingestion endpoint if you want to push snapshots from elsewhere.
- * Accepts the exact snapshot you pasted earlier.
- */
-app.post('/api/overlay/activity/ingest', (req, res) => {
-  try {
-    const body = req.body || {};
-    const serverId = body.serverId || body.server || 'us-1';
-    const region = parseRegionFromServerKey(serverId);
-    const ts = Number(body.timestamp) || Date.now();
-    const players = Array.isArray(body.players) ? body.players : [];
-    for (const p of players) {
-      const id  = p.privyId || p.id || p.playerId;
-      const mv  = Number(p.monetaryValue ?? p.value ?? p.money ?? 0);
-      const name = p.name || p.username || p.playerName || '';
-      if (!id || !(mv > 0)) continue;
-      addPing({ id, ts, username: name, region });
+      // Drop legacy Region (keep topRegion, regionCounts)
+      if (Object.prototype.hasOwnProperty.call(p, 'Region')) { delete p.Region; removedRegion++; }
+
+      // Remove "Anonymous Player" from usernames (any case/spacing)
+      const u = (p.usernames && typeof p.usernames === 'object') ? p.usernames : {};
+      for (const name of Object.keys(u)) {
+        if (AN.test(name)) { delete u[name]; removedAnon++; }
+      }
+      p.usernames = u;
+
+      // Recompute topUsernames from usernames, ensure no Anonymous in top
+      const top = Object.entries(u)
+        .filter(([,v]) => typeof v === 'number' && v > 0)
+        .sort((a,b) => b[1]-a[1])
+        .slice(0,3)
+        .map(([name, count]) => ({ name, count }));
+      const before = Array.isArray(p.topUsernames) ? p.topUsernames.length : 0;
+      p.topUsernames = top.filter(t => !AN.test(t.name));
+      filteredTop += Math.max(0, before - p.topUsernames.length);
+
+      // Prune empties (no usernames and no realName)
+      const hasReal = !!(p.realName && String(p.realName).trim());
+      if (!hasReal && Object.keys(u).length === 0) prune.push(k);
     }
-    res.json({ ok: true, added: players.length });
+    for (const k of prune) { delete players[k]; pruned++; }
+
+    __USERNAME_MAPPING__.players = players;
+    __USERNAME_MAPPING__.updatedAt = Date.now();
+
+    // Persist to /data
+    await flushUsernamesNow();
+
+    res.json({ ok:true, stats:{
+      removedPending, removedRegion, removedAnon, filteredTop, pruned,
+      total: Object.keys(players).length
+    }});
   } catch (e) {
-    res.status(500).json({ ok: false, error: String(e?.message || e) });
+    res.status(500).json({ ok:false, error: String(e) });
   }
 });
 
-// -------------------- minimal stubs (keep old routes working) ----
-app.get('/api/user/mapping', (req, res) => {
-  res.json({ players: {} });
-});
+app.post("/api/admin/unuse-key", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
 
-app.get('/api/user/alerts', (req, res) => {
-  res.json({ alerts: [] });
-});
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
 
-// Simple leaderboard proxy so your core continues to work if needed.
-app.get('/api/game/leaderboard', async (req, res) => {
   try {
-    const serverKey = req.query.serverKey || 'us-1';
-    const players = await fetchPlayers(serverKey);
-    const entries = players
-      .map((p, i) => ({
-        name: p.name || p.username || p.playerName || '#' + (i + 1),
-        privyId: p.privyId || p.id || p.playerId,
-        monetaryValue: Number(p.monetaryValue ?? p.value ?? p.money ?? 0),
-        size: Number(p.size ?? p.snakeSize ?? p.length ?? 0),
-      }))
-      .filter(e => e.monetaryValue > 0 && e.size > 2);
-    res.json({ entries });
-  } catch (e) {
-    res.status(500).json({ entries: [] });
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+
+    found.used = false;
+    delete found.usedAt;
+    delete found.boundProof;
+
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok:true, message:`${key} reset to unused` });
+  } catch (err) {
+    console.error("unuse-key:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
   }
 });
 
-app.get('/health', (req, res) => res.json({ ok: true, time: Date.now() }));
-
-app.listen(PORT, () => {
-  console.log('server listening on', PORT, 'servers=', SERVERS.join(','));
+app.post("/api/admin/add-keys", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  const count = req.body.count || 1;
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    for (let i = 0; i < count; i++) {
+      data.keys.push({
+        key: genKey(),
+        used: false,
+        revoked: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok: true, added: count });
+  } catch (err) {
+    console.error("add-keys:", err);
+    res.status(500).json({ ok: false, error: "write_failed" });
+  }
 });
+
+app.post("/api/admin/revoke", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  const { key } = req.body;
+  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok: false, error: "not_found" });
+    found.revoked = true;
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("revoke:", err);
+    res.status(500).json({ ok: false, error: "write_failed" });
+  }
+});
+
+app.post("/api/validate", async (req, res) => {
+  const { key, proof } = req.body || {};
+  if (!key)
+    return res.status(400).json({ ok: false, error: "missing_key" });
+
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+
+    if (!found)
+      return res.status(404).json({ ok: false, error: "not_found" });
+    if (found.revoked)
+      return res.status(403).json({ ok: false, error: "revoked" });
+
+    if (!found.used)
+      return res.status(200).json({ ok: true, usable: true, used: false });
+
+    if (found.boundProof && proof && proof === found.boundProof) {
+      // ✅ Add lastUsedAt and save using the correct sha
+      try {
+        found.lastUsedAt = new Date().toISOString();
+        await ghSave(GITHUB_FILE_PATH, data, sha); // now includes sha
+      } catch (err) {
+        console.error("Failed to update lastUsedAt:", err);
+      }
+
+      return res.status(200).json({ ok: true, valid: true, bound: true, used: true });
+    }
+
+    return res.status(409).json({ ok: false, used: true, error: "bound_mismatch" });
+
+  } catch (err) {
+    console.error("validate:", err);
+    res.status(500).json({ ok: false, error: "read_failed" });
+  }
+});
+// === Core update endpoints ===
+
+// Serve current version
+
+
+app.get("/api/core/version", (req, res) => {
+  res.json({ version: ACTIVE_VERSION });
+});
+
+app.post("/api/core/bump", (req, res) => {
+  // auth: choose one. If you want x-admin-token:
+  const hdr = req.headers["x-admin-token"];
+  if (hdr !== ADMIN_TOKEN) return res.status(403).json({ error: "unauthorized" });
+
+  const { version } = req.body || {};
+  if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) {
+    return res.status(400).json({ error: "invalid version format (x.y.z)" });
+  }
+  // must be higher
+  const toNum = v => v.split(".").map(Number);
+  const [a,b,c] = toNum(ACTIVE_VERSION);
+  const [x,y,z] = toNum(version);
+  const newer = x>a || (x===a && (y>b || (y===b && z>c)));
+  if (!newer) return res.status(400).json({ error: "version must be higher than current" });
+
+  ACTIVE_VERSION = version;
+  console.log(`✅ CORE activeVersion -> ${ACTIVE_VERSION}`);
+  res.json({ ok:true, activeVersion: ACTIVE_VERSION });
+});
+
+
+
+
+
+app.post("/api/register", async (req, res) => {
+  const { key, proof } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+  if (!proof) return res.status(400).json({ ok:false, error:"missing_proof" });
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+    if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
+    if (found.used) {
+      if (found.boundProof && proof === found.boundProof)
+        return res.json({ ok:true, used:true, bound:true, already:true });
+      return res.status(409).json({ ok:false, used:true, error:"already_used" });
+    }
+    found.used = true;
+    found.usedAt = new Date().toISOString();
+    found.boundProof = String(proof);
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok:true, used:true, bound:true });
+  } catch (err) {
+    console.error("register:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+
+/* =======================================================
+   =============== USERNAME SYSTEM (new) =================
+   ======================================================= */
+
+// license routes: same behavior but prefixed /api/user/*
+app.get("/api/user/admin/list-keys", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+  try {
+    const { data } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    res.json(data);
+  } catch (err) {
+    console.error("user-list:", err);
+    res.status(500).json({ ok:false, error:"read_failed" });
+  }
+});
+app.post("/api/admin/add-note", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+
+  const { key, note } = req.body || {};
+  if (!key || typeof note !== "string")
+    return res.status(400).json({ ok: false, error: "missing_fields" });
+
+  try {
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found)
+      return res.status(404).json({ ok: false, error: "not_found" });
+
+    found.note = note.trim();
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok: true, message: `Note added to ${key}` });
+  } catch (err) {
+    console.error("add-note:", err);
+    res.status(500).json({ ok: false, error: "write_failed" });
+  }
+});
+
+
+app.post("/api/user/admin/add-keys", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+  const count = req.body.count || 1;
+  try {
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    for (let i=0;i<count;i++){
+      data.keys.push({ key:genKey(), used:false, revoked:false, createdAt:new Date().toISOString() });
+    }
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
+    res.json({ ok:true, added:count });
+  } catch(err){ console.error("user-add:",err); res.status(500).json({ok:false,error:"write_failed"}); }
+});
+app.post("/api/user/admin/delete-key", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  try {
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const before = data.keys.length;
+    data.keys = data.keys.filter(k => k.key !== key);
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
+    res.json({ ok:true, removed: before - data.keys.length });
+  } catch (err) {
+    console.error("user-delete-key:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+app.post("/api/user/admin/unuse-key", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  try {
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+
+    found.used = false;
+    delete found.usedAt;
+    delete found.boundProof;
+
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
+    res.json({ ok:true, message:`${key} reset to unused` });
+  } catch (err) {
+    console.error("user-unuse-key:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+app.post("/api/user/admin/add-note", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { key, note } = req.body || {};
+  if (!key || typeof note !== "string")
+    return res.status(400).json({ ok:false, error:"missing_fields" });
+
+  try {
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+
+    found.note = note.trim();
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
+    res.json({ ok:true, message:`Note added to ${key}` });
+  } catch (err) {
+    console.error("user-add-note:", err);
+    res.status(500).json({ ok:false, error:"write_failed" });
+  }
+});
+app.post("/api/user/admin/delete-player", (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok:false, error:"unauthorized" });
+
+  const { privyId } = req.body || {};
+  if (!privyId) return res.status(400).json({ ok:false, error:"missing_privyId" });
+
+  const data = loadUserFile();
+  if (!data.players || !data.players[privyId])
+    return res.status(404).json({ ok:false, error:"not_found" });
+
+  delete data.players[privyId];
+  saveUserFile(data);
+  res.json({ ok:true, message:`Deleted ${privyId}` });
+});
+
+app.post("/api/user/admin/revoke", async (req,res)=>{
+  if (req.header("admin-token")!==ADMIN_TOKEN)
+    return res.status(401).json({ok:false,error:"unauthorized"});
+  const {key}=req.body;
+  if(!key)return res.status(400).json({ok:false,error:"missing_key"});
+  try{
+    const {data,sha}=await ghLoad(USERKEYS_FILE_PATH,{keys:[]});
+    const found=data.keys.find(k=>k.key===key);
+    if(!found)return res.status(404).json({ok:false,error:"not_found"});
+    found.revoked=true;
+    await ghSave(USERKEYS_FILE_PATH,data,sha);
+    res.json({ok:true});
+  }catch(err){console.error("user-revoke:",err);res.status(500).json({ok:false,error:"write_failed"});}
+});
+
+app.post("/api/user/validate", async (req, res) => {
+  const { key, proof } = req.body || {};
+  if (!key)
+    return res.status(400).json({ ok: false, error: "missing_key" });
+
+  try {
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+
+    if (!found)
+      return res.status(404).json({ ok: false, error: "not_found" });
+    if (found.revoked)
+      return res.status(403).json({ ok: false, error: "revoked" });
+
+    if (!found.used)
+      return res.status(200).json({ ok: true, usable: true, used: false });
+
+    if (found.boundProof && proof && proof === found.boundProof) {
+      // ✅ same logic: update lastUsedAt and save
+      try {
+        found.lastUsedAt = new Date().toISOString();
+        await ghSave(USERKEYS_FILE_PATH, data, sha);
+      } catch (err) {
+        console.error("Failed to update lastUsedAt (user):", err);
+      }
+
+      return res.status(200).json({ ok: true, valid: true, bound: true, used: true });
+    }
+
+    return res.status(409).json({ ok: false, used: true, error: "bound_mismatch" });
+
+  } catch (err) {
+    console.error("user-validate:", err);
+    res.status(500).json({ ok: false, error: "read_failed" });
+  }
+});
+
+
+app.post("/api/user/register", async (req,res)=>{
+  const {key,proof}=req.body||{};
+  if(!key)return res.status(400).json({ok:false,error:"missing_key"});
+  if(!proof)return res.status(400).json({ok:false,error:"missing_proof"});
+  try{
+    const {data,sha}=await ghLoad(USERKEYS_FILE_PATH,{keys:[]});
+    const f=data.keys.find(k=>k.key===key);
+    if(!f)return res.status(404).json({ok:false,error:"not_found"});
+    if(f.revoked)return res.status(403).json({ok:false,error:"revoked"});
+    if(f.used){
+      if(f.boundProof&&proof===f.boundProof)
+        return res.json({ok:true,used:true,bound:true,already:true});
+      return res.status(409).json({ok:false,used:true,error:"already_used"});
+    }
+    f.used=true; f.usedAt=new Date().toISOString(); f.boundProof=String(proof);
+    await ghSave(USERKEYS_FILE_PATH,data,sha);
+    res.json({ok:true,used:true,bound:true});
+  }catch(err){console.error("user-register:",err);res.status(500).json({ok:false,error:"write_failed"});}
+});
+app.get("/api/user/alerts", async (req, res) => {
+  const key = req.query.key;
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
+
+  try {
+    const alerts = JSON.parse(fs.readFileSync("/data/alerts.json", "utf8"));
+    const visible = alerts.filter(a => a.target === "all" || (a.target === "key" && a.key === key));
+    res.json({ ok:true, alerts: visible });
+  } catch (e) {
+    console.error("alerts:", e);
+    res.status(500).json({ ok:false, alerts: [] });
+  }
+});
+
+// ---------- username tracking ----------
+
+
+
+
+
+
+
+/* =======================================================
+   ================== Default & Start ====================
+   ======================================================= */
+
+app.get("/", (req,res)=>
+  res.send("✅ Combined License + Username Tracker Active")
+);
+
+app.listen(PORT, ()=> console.log(`✅ Combined server running on :${PORT}`));
