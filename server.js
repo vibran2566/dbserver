@@ -265,7 +265,7 @@ async function dbPollShard(serverKey) {
     name: (p.name || '').trim(),
     size: Number(p.size) || 0,
     monetaryValue: Number(p.monetaryValue) || 0,
-+   joinTime: Number(p.joinTime) || undefined,
+    joinTime: Number(p.joinTime) || undefined,
     rank: i + 1
   }));
 // record session + a ping for mv>0 players
