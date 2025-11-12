@@ -16,12 +16,7 @@ const USER_FILE = path.join(DATA_DIR, "usernames.json");
 const __filename = fileURLToPath(import.meta.url);
 const INACTIVITY_MS = 3 * 60 * 1000;            // 3 minutes
 const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // ~31 days
-const WINDOW_SPECS  = {
-  "1h": { binMs:  5 * 60 * 1000, count: 12 },
-  "1d": { binMs: 60 * 60 * 1000, count: 24 },
-  "1w": { binMs: 12 * 60 * 60 * 1000, count: 14 },
-  "1m": { binMs: 24 * 60 * 60 * 1000, count: 30 },
-};
+
 function trimOld(p, now){
   const cutoff = now - RETAIN_MS;
   p.sessions = (p.sessions||[]).filter(s => (s.end ?? s.start) >= cutoff);
