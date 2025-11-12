@@ -28,27 +28,6 @@ function trimOld(p, now){
   p.pings    = (p.pings   || []).filter(x => x.ts >= cutoff);
 }
 
-function recordActivity(privyId, now, joinTime){
-  const p = ensureActivityPlayer(privyId);
-  trimOld(p, now);
-  const last = p.sessions[p.sessions.length - 1];
-  const first = !last && !p.lastSeenActivity;
-  const startMs = (first && Number.isFinite(joinTime)) ? Number(joinTime) : now;
-
-  if (!last) p.sessions.push({ start: startMs, end: now });
-  else if ((now - p.lastSeenActivity) > INACTIVITY_MS) p.sessions.push({ start: Math.min(startMs, now), end: now });
-  else last.end = now;
-
-  const a = p.sessions, n = a.length;
-  if (n >= 2) { const A=a[n-2], B=a[n-1]; if (B.start - A.end < INACTIVITY_MS) { A.end = Math.max(A.end, B.end); a.pop(); } }
-  p.lastSeenActivity = now;
-}
-
-function recordPing(privyId, username, region, ts){
-  const p = ensureActivityPlayer(privyId);
-  trimOld(p, ts);
-  p.pings.push({ ts, username, region });
-}
 
 function alignWindowStart(now, binMs, count, tzOffsetMin){
   const off = (tzOffsetMin|0) * 60 * 1000;
@@ -212,13 +191,7 @@ const WINDOW_SPECS = {
   '1m': { binMs: 24 * 60 * 60 * 1000, count: 30 },
 };
 
-function alignWindowStart(now, binMs, count, tzOffsetMin) {
-  const off = (tzOffsetMin|0) * 60 * 1000;
-  const localNow = now - off;
-  const alignedRight = Math.floor(localNow / binMs) * binMs;
-  const startLocal = alignedRight - (count - 1) * binMs;
-  return startLocal + off;
-}
+
 
 function makeBinsAndMeta(p, windowKey, tzOffsetMin){
   const spec = WINDOW_SPECS[windowKey] || WINDOW_SPECS["1h"];
