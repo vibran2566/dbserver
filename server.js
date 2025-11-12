@@ -178,25 +178,6 @@ function recordActivity(privyId, now, joinTime) {
   p.lastSeenActivity = now;
 }
 
-function compactTailSessions(p){
-  if (!p || !Array.isArray(p.sessions) || p.sessions.length < 2) return;
-  const a = p.sessions;
-  const n = a.length;
-  const A = a[n - 2];
-  const B = a[n - 1];
-
-  const Aend   = Number(A.end ?? A.start);
-  const Bstart = Number(B.start);
-  const Bend   = Number(B.end ?? B.start);
-  if (!Number.isFinite(Aend) || !Number.isFinite(Bstart) || !Number.isFinite(Bend)) return;
-
-  // Merge if the gap between A and B is less than the inactivity threshold
-  if ((Bstart - Aend) < INACTIVITY_MS) {
-    A.end = Math.max(Aend, Bend);
-    a.pop();
-  }
-}
-
 
 
 function compactTailSessions(p){
