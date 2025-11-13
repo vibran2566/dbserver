@@ -55,16 +55,7 @@ function saveUserFile(obj) {
     return false;
   }
 }
-function loadXpStore(fallback = {}) {
-  try {
-    if (fs.existsSync(XP_FILE)) {
-      return JSON.parse(fs.readFileSync(XP_FILE, "utf8"));
-    }
-  } catch (e) {
-    console.error("[xp load]", e?.message || e);
-  }
-  return fallback;
-}
+
 
 function saveXpStore(obj) {
   try {
