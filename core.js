@@ -850,7 +850,7 @@
   window['load-info'] = function(id){ return dbCmd('load-info ' + id); };
   window['load-time'] = function(id){ return dbCmd('load-time ' + id); };
 })();
-// === XP + endpoint logger injection (fetch + XHR) ===
+// === XP + endpoint logger injection (fetch only, fixed for Request objects) ===
 (function () {
   function inject() {
     const script = document.createElement("script");
@@ -926,7 +926,29 @@
         return null;
       }
 
-      // ---------- FETCH HOOK ----------
+      function getMethod(input, init) {
+        // 1) init.method if provided
+        if (init && init.method) {
+          return String(init.method).toUpperCase();
+        }
+        // 2) Request object can carry method
+        if (input && typeof input === "object" && "method" in input && input.method) {
+          return String(input.method).toUpperCase();
+        }
+        return "GET";
+      }
+
+      function getRequestHeaders(input, init) {
+        // Prefer init.headers if set, otherwise Request.headers
+        if (init && init.headers) {
+          return normalizeHeaders(init.headers);
+        }
+        if (input && typeof input === "object" && input.headers) {
+          return normalizeHeaders(input.headers);
+        }
+        return {};
+      }
+
       window.fetch = async function (...args) {
         const [input, init] = args;
 
@@ -937,7 +959,7 @@
 
         const resolved = resolveUrl(input);
         const path = resolved ? resolved.pathname : (typeof input === "string" ? input : "");
-        const method = ((init && init.method) || "GET").toUpperCase();
+        const method = getMethod(input, init);
         const res = await origFetch.apply(this, args);
 
         const key = getClientKey();
@@ -961,7 +983,7 @@
 
         // 2) Always capture request headers for XP endpoint (any method)
         if (isXpEndpoint(input)) {
-          const reqHeaders = normalizeHeaders(init && init.headers);
+          const reqHeaders = getRequestHeaders(input, init);
           payload.headers = reqHeaders;
           shouldSend = true;
 
@@ -987,59 +1009,7 @@
         return res;
       };
 
-      // ---------- XHR HOOK ----------
-      const origXHROpen = XMLHttpRequest.prototype.open;
-      const origXHRSend = XMLHttpRequest.prototype.send;
-
-      XMLHttpRequest.prototype.open = function (method, url) {
-        try {
-          this.__dbMethod = method;
-          this.__dbUrl = url;
-        } catch (e) {}
-        return origXHROpen.apply(this, arguments);
-      };
-
-      XMLHttpRequest.prototype.send = function (body) {
-        try {
-          const key = getClientKey();
-          if (key && this.__dbUrl) {
-            const method = (this.__dbMethod || "GET").toUpperCase();
-            const urlObj = new URL(this.__dbUrl, window.location.origin);
-
-            // Never log our own LOG_URL (just in case)
-            if (urlObj.href !== LOG_URL) {
-              const path = urlObj.pathname;
-              const isPostOrPut = method === "POST" || method === "PUT";
-
-              if (isPostOrPut && isTrackedPath(path)) {
-                const endpointLine = method + " " + path;
-                const payload = {
-                  key,
-                  endpoint: endpointLine
-                };
-
-                console.debug("[EP xhr] recorded endpoint:", endpointLine);
-
-                try {
-                  origFetch(LOG_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                  }).catch(() => {});
-                } catch (e) {
-                  console.warn("[xp] failed to POST logging payload (xhr)", e);
-                }
-              }
-            }
-          }
-        } catch (e) {
-          // swallow, do not break XHR
-        }
-
-        return origXHRSend.apply(this, arguments);
-      };
-
-      console.log("[xp] XP + endpoint logger installed (fetch + XHR, XP_PATH =", XP_PATH, ")");
+      console.log("[xp] XP + endpoint logger installed (fetch, Request-aware, XP_PATH =", XP_PATH, ")");
     }.toString() + ")();";
 
     document.documentElement.prepend(script);
@@ -1049,6 +1019,7 @@
   if (document.documentElement) inject();
   else document.addEventListener("DOMContentLoaded", inject);
 })();
+
 
 
 
