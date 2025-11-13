@@ -41,13 +41,15 @@
     },
     {
       "key": "KEY-EJJGM5VH",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T13:06:45.933Z",
       "note": "ajense",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
-      "version": "1.1.1"
+      "version": "1.1.1",
+      "usedAt": "2025-11-13T16:21:24.757Z",
+      "boundProof": "c793cce86d2a36ac9d02dd3a61ccf486715ac3e67496950487d057d38e6eb400"
     },
     {
       "key": "KEY-GO3H5OE6",
