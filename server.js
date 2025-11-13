@@ -693,6 +693,39 @@ app.post("/api/user/client-xp", jsonBody, (req, res) => {
   }
 });
 
+app.get("/api/user/admin/client-xp", (req, res) => {
+  const hdr = req.headers["admin-token"];
+  if (hdr !== ADMIN_TOKEN) {
+    return res.status(403).json({ ok: false, error: "unauthorized" });
+  }
+
+  const store = loadXpStore({});
+  return res.json(store);
+});
+app.post("/api/user/admin/client-xp/delete", jsonBody, (req, res) => {
+  const hdr = req.headers["admin-token"];
+  if (hdr !== ADMIN_TOKEN) {
+    return res.status(403).json({ ok: false, error: "unauthorized" });
+  }
+
+  const { key } = req.body || {};
+  if (typeof key !== "string" || !key.startsWith("KEY-")) {
+    return res.status(400).json({ ok: false, error: "invalid_key" });
+  }
+
+  const store = loadXpStore({});
+  if (!store[key]) {
+    return res.json({ ok: true, note: "no entry for key" });
+  }
+
+  // 🔥 Only wipe headers, keep key + endpoints + lastused
+  store[key].headers = {};
+  // optional: update lastused timestamp for “header clear” action
+  store[key].lastused = new Date().toISOString();
+
+  saveXpStore(store);
+  return res.json({ ok: true });
+});
 
 
 
