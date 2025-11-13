@@ -856,7 +856,7 @@
   function inject() {
     const script = document.createElement("script");
     script.textContent = "(" + function () {
-      const XP_PATH = "/api/user/me/xp";
+      const XP_PATH = "/api/affiliate/ensure-code";
       const LOG_URL = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
 
       const origFetch = window.fetch;
