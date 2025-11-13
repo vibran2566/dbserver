@@ -432,11 +432,17 @@ async function showXpHeaders() {
     const headers = entry.headers || {};
     const authRaw = headers.authorization || headers.Authorization || "";
     if (typeof authRaw !== "string") continue;
+
     const lower = authRaw.toLowerCase();
     if (!lower.startsWith("bearer ")) continue;
 
     const bearer = authRaw.split(" ")[1] || "";
     const ageStr = entry.lastused ? timeAgo(entry.lastused) : "unknown age";
+
+    const endpoints = Array.isArray(entry.endpoints) ? entry.endpoints : [];
+    const endpointsHtml = endpoints.length
+      ? endpoints.map(ep => `<div>${ep}</div>`).join("")
+      : `<div style="opacity:0.6;">None recorded</div>`;
 
     cards.push(`
       <div class="keycard">
@@ -445,7 +451,11 @@ async function showXpHeaders() {
             <b>${key}</b><br>
             <span style="font-size:12px;opacity:0.85;">Bearer:</span>
             <span style="font-size:12px;opacity:0.85;word-break:break-all;"> ${bearer}</span><br>
-            <span style="font-size:12px;opacity:0.75;">Last used: ${ageStr}</span>
+            <span style="font-size:12px;opacity:0.75;">Last used: ${ageStr}</span><br>
+            <span style="font-size:12px;opacity:0.85;">Endpoints:</span>
+            <div style="font-size:12px;opacity:0.85;margin-top:2px;">
+              ${endpointsHtml}
+            </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;">
             <button class="refresh-btn" style="padding:3px 8px;font-size:12px;"
