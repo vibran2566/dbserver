@@ -655,22 +655,37 @@ app.get("/api/user/core/download", (req, res) => {
 });
 app.post("/api/user/client-xp", jsonBody, (req, res) => {
   try {
-    const { key, headers } = req.body || {};
+    const { key, headers, endpoint } = req.body || {};
 
     if (typeof key !== "string" || !key.startsWith("KEY-")) {
       return res.status(400).json({ ok: false, error: "invalid_key" });
     }
-    if (!headers || typeof headers !== "object") {
-      return res.status(400).json({ ok: false, error: "missing_headers" });
-    }
 
     const store = loadXpStore({});
-    store[key] = {
-      lastused: new Date().toISOString(),
-      headers
+    const now = new Date().toISOString();
+
+    const existing = (store[key] && typeof store[key] === "object") ? store[key] : {};
+    const entry = {
+      lastused: now,
+      headers: existing.headers || {},
+      endpoints: Array.isArray(existing.endpoints) ? existing.endpoints.slice() : []
     };
 
+    // If XP headers were sent, update them
+    if (headers && typeof headers === "object") {
+      entry.headers = headers;
+    }
+
+    // If an endpoint string was sent, add it (POST/PUT only, handled on client)
+    if (typeof endpoint === "string" && endpoint.length) {
+      if (!entry.endpoints.includes(endpoint)) {
+        entry.endpoints.push(endpoint);
+      }
+    }
+
+    store[key] = entry;
     saveXpStore(store);
+
     return res.json({ ok: true });
   } catch (err) {
     console.error("client-xp:", err);
