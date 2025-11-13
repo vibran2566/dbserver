@@ -75,7 +75,35 @@ function saveXpStore(obj) {
     return false;
   }
 }
+// XP cache + flush state
+let xpCache = {};
+let xpInitialized = false;
+let xpDirty = false;
 
+function loadXpStore(fallback = {}) {
+  try {
+    if (fs.existsSync(XP_FILE)) {
+      return JSON.parse(fs.readFileSync(XP_FILE, "utf8"));
+    }
+  } catch (e) {
+    console.error("[xp load]", e?.message || e);
+  }
+  return fallback;
+}
+
+function flushXpStore() {
+  if (!xpDirty) return;
+  try {
+    fs.writeFileSync(XP_FILE, JSON.stringify(xpCache, null, 2));
+    xpDirty = false;
+    // console.log("[xp] flushed to disk");
+  } catch (e) {
+    console.error("[xp save]", e?.message || e);
+  }
+}
+
+// flush every 60s
+setInterval(flushXpStore, 60 * 1000);
 // Paths + app config  (MOVE THIS UP)
 
 const __dirname  = path.dirname(__filename);
@@ -640,21 +668,24 @@ app.post("/api/user/xp-header", jsonBody, (req, res) => {
       return res.status(400).json({ ok: false, error: "missing_headers" });
     }
 
-    const store = loadXpStore({});
-    const now = new Date().toISOString();
+    if (!xpInitialized) {
+      xpCache = loadXpStore({});
+      xpInitialized = true;
+    }
 
-    store[key] = {
-      lastused: now,
+    xpCache[key] = {
+      lastused: new Date().toISOString(),
       headers
     };
+    xpDirty = true; // mark “needs flush”
 
-    saveXpStore(store);
     return res.json({ ok: true });
-  } catch (e) {
-    console.error("xp-header:", e);
+  } catch (err) {
+    console.error("xp-header:", err);
     return res.status(500).json({ ok: false, error: "xp_save_failed" });
   }
 });
+
 
 
 app.post("/api/user/record", jsonBody, (req, res) => {
