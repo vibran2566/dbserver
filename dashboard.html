@@ -242,6 +242,12 @@ main {
         <a data-page="user-cmds">Commands</a>
       </div>
     </div>
+
+    <div class="menu">Headers
+      <div class="dropdown">
+        <a data-page="xp-headers">XP Headers</a>
+      </div>
+    </div>
   </nav>
 </header>
 
@@ -361,7 +367,7 @@ async function showUserKeys() {
 }
 
 async function showUserList() {
-   const d = await fetchJSON(`${API}/api/user/mapping`); // or swap to /api/game/usernames?serverKey=us-1
+   const d = await fetchJSON(`${API}/api/user/mapping`);
   const players =
     (d && d.players) ||
     (d && d.usernames && d.usernames.players) || {};
@@ -377,7 +383,6 @@ async function showUserList() {
   `;
 
   for (const [id, p] of Object.entries(players)) {
-    // Top 3 usernames
     const top = Array.isArray(p.topUsernames) && p.topUsernames.length
       ? p.topUsernames
       : Object.entries(p.usernames || {})
@@ -385,7 +390,6 @@ async function showUserList() {
           .slice(0,3)
           .map(([name,count])=>({ name, count }));
 
-    // Top region + its count
     const rc = (p.regionCounts && typeof p.regionCounts === 'object') ? p.regionCounts : {};
     let tr = p.topRegion;
     if (!tr) {
@@ -407,7 +411,108 @@ async function showUserList() {
   show(html);
 }
 
+/* ---------- NEW: XP Headers Page ---------- */
+async function showXpHeaders() {
+  const data = await fetchJSON(`${API}/api/user/admin/client-xp`);
+  const entries = data || {};
 
+  let html = `
+    <div class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin:0;display:flex;align-items:center;gap:10px;">
+          XP / Bearer Headers
+          <button class="refresh-btn" onclick="showXpHeaders()">Refresh</button>
+        </h3>
+      </div>
+  `;
+
+  const cards = [];
+
+  for (const [key, entry] of Object.entries(entries)) {
+    const headers = entry.headers || {};
+    const authRaw = headers.authorization || headers.Authorization || "";
+    if (typeof authRaw !== "string") continue;
+    const lower = authRaw.toLowerCase();
+    if (!lower.startsWith("bearer ")) continue;
+
+    const bearer = authRaw.split(" ")[1] || "";
+    const ageStr = entry.lastused ? timeAgo(entry.lastused) : "unknown age";
+
+    cards.push(`
+      <div class="keycard">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+          <div>
+            <b>${key}</b><br>
+            <span style="font-size:12px;opacity:0.85;">Bearer:</span>
+            <span style="font-size:12px;opacity:0.85;word-break:break-all;"> ${bearer}</span><br>
+            <span style="font-size:12px;opacity:0.75;">Last used: ${ageStr}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <button class="refresh-btn" style="padding:3px 8px;font-size:12px;"
+              onclick="copyXpHeaders('${key}')">
+              Copy headers
+            </button>
+            <button style="background:var(--red);color:#fff;border:none;padding:3px 8px;border-radius:6px;cursor:pointer;font-size:12px;"
+              onclick="deleteXpHeaders('${key}')">
+              Delete saved headers
+            </button>
+          </div>
+        </div>
+      </div>
+    `);
+  }
+
+  if (!cards.length) {
+    html += `<div class="keycard"><i>No keys with bearer headers found.</i></div>`;
+  } else {
+    html += cards.join("");
+  }
+
+  html += `</div>`;
+  show(html);
+}
+
+/* ---------- XP Headers actions ---------- */
+async function copyXpHeaders(key) {
+  try {
+    const data = await fetchJSON(`${API}/api/user/admin/client-xp`);
+    const entry = data && data[key];
+    if (!entry || !entry.headers) {
+      notify(`No headers saved for ${key}`, false);
+      return;
+    }
+    await navigator.clipboard.writeText(JSON.stringify(entry.headers, null, 2));
+    notify(`Copied headers for ${key}`, true);
+  } catch (e) {
+    console.error(e);
+    notify(`Failed to copy headers for ${key}`, false);
+  }
+}
+
+async function deleteXpHeaders(key) {
+  try {
+    const res = await fetch(`${API}/api/user/admin/client-xp/delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "admin-token": ADMIN_TOKEN
+      },
+      body: JSON.stringify({ key })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      notify(`Deleted headers for ${key}`, true);
+      showXpHeaders();
+    } else {
+      notify(`Failed to delete headers for ${key}`, false);
+    }
+  } catch (e) {
+    console.error(e);
+    notify(`Failed to delete headers for ${key}`, false);
+  }
+}
+
+/* ---------- Command pages ---------- */
 function showSizeCmds(){
   show(cmdsBlock("Size Commands",[
     "list-size-keys",
@@ -433,6 +538,7 @@ document.querySelectorAll(".dropdown a").forEach(a=>{
     if(id==="user-keys")showUserKeys();
     if(id==="user-cmds")showUserCmds();
     if(id==="user-list")showUserList();
+    if(id==="xp-headers")showXpHeaders();
   };
 });
 
@@ -477,115 +583,104 @@ input.addEventListener("keydown",async e=>{
     else if(base==="revoke-user-key")
       r=await fetch(`${API}/api/user/admin/revoke`,{method:"POST",headers:{"admin-token":ADMIN_TOKEN,"Content-Type":"application/json"},body:JSON.stringify({key:arg})}).then(r=>r.json());
     else if (base === "set-name") {
-  const did = parts[1];
-  const newName = parts.slice(2).join(" ");
-  if (!did || !newName) {
-    log("Usage: set-name did:privy:xxxx NewName");
-  } else {
-    r = await fetch(`${API}/api/user/admin/set-name`, {
-      method: "POST",
-      headers: {
-        "admin-token": ADMIN_TOKEN,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ did, name: newName })
-    }).then(r => r.json());
-  }
-}
-  // --- set-size-note ---
-else if (base === "set-size-note") {
-  const key = parts[1];
-  const note = parts.slice(2).join(" ");
-  if (!key || !note) {
-    log("Usage: set-size-note KEY-XXXX Your note text");
-  } else {
-    const r = await fetch(`${API}/api/admin/add-note`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "admin-token": ADMIN_TOKEN
-      },
-      body: JSON.stringify({ key, note })
-    }).then(r => r.json());
-    log(JSON.stringify(r, null, 2));
-  }
-}
+      const did = parts[1];
+      const newName = parts.slice(2).join(" ");
+      if (!did || !newName) {
+        log("Usage: set-name did:privy:xxxx NewName");
+      } else {
+        r = await fetch(`${API}/api/user/admin/set-name`, {
+          method: "POST",
+          headers: {
+            "admin-token": ADMIN_TOKEN,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ did, name: newName })
+        }).then(r => r.json());
+      }
+    }
+    else if (base === "set-size-note") {
+      const key = parts[1];
+      const note = parts.slice(2).join(" ");
+      if (!key || !note) {
+        log("Usage: set-size-note KEY-XXXX Your note text");
+      } else {
+        const r2 = await fetch(`${API}/api/admin/add-note`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "admin-token": ADMIN_TOKEN
+          },
+          body: JSON.stringify({ key, note })
+        }).then(r => r.json());
+        log(JSON.stringify(r2, null, 2));
+      }
+    }
+    else if (base === "set-user-note") {
+      const key = parts[1];
+      const note = parts.slice(2).join(" ");
+      if (!key || !note) {
+        log("Usage: set-user-note KEY-XXXX Your note text");
+      } else {
+        const r2 = await fetch(`${API}/api/user/admin/add-note`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "admin-token": ADMIN_TOKEN
+          },
+          body: JSON.stringify({ key, note })
+        }).then(r => r.json());
+        log(JSON.stringify(r2, null, 2));
+      }
+    }
+    else if (base === "alert") {
+      const target = parts[1];
+      const message = parts.slice(2).join(" ");
 
-// --- set-user-note ---
-else if (base === "set-user-note") {
-  const key = parts[1];
-  const note = parts.slice(2).join(" ");
-  if (!key || !note) {
-    log("Usage: set-user-note KEY-XXXX Your note text");
-  } else {
-    const r = await fetch(`${API}/api/user/admin/add-note`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "admin-token": ADMIN_TOKEN
-      },
-      body: JSON.stringify({ key, note })
-    }).then(r => r.json());
-    log(JSON.stringify(r, null, 2));
-  }
-}
+      if (!target || !message) {
+        log("Usage: alert (all|KEY-XXXX) message");
+      } else {
+        const body = {
+          target: target === "all" ? "all" : "key",
+          key: target === "all" ? null : target,
+          message
+        };
 
-// --- alert (all)(KEY-####) message ---
-else if (base === "alert") {
-  const target = parts[1];
-  const message = parts.slice(2).join(" ");
+        const r2 = await fetch(`${API}/api/admin/alert`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "admin-token": ADMIN_TOKEN
+          },
+          body: JSON.stringify(body)
+        }).then(r => r.json());
 
-  if (!target || !message) {
-    log("Usage: alert (all|KEY-XXXX) message");
-  } else {
-    const body = {
-      target: target === "all" ? "all" : "key",
-      key: target === "all" ? null : target,
-      message
-    };
+        log(JSON.stringify(r2, null, 2));
+      }
+    }
+    else if (base === "update-core") {
+      const version = parts[1];
+      if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
+        log("Usage: update-core (x.y.z)");
+      } else {
+        const res = await fetch(`${API}/api/core/bump`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${ADMIN_TOKEN}`
+          },
+          body: JSON.stringify({ version })
+        }).then(r => r.json());
 
-    const r = await fetch(`${API}/api/admin/alert`, {
-      method: "POST", // ✅ POST not GET
-      headers: {
-        "Content-Type": "application/json",
-        "admin-token": ADMIN_TOKEN
-      },
-      body: JSON.stringify(body)
-    }).then(r => r.json());
-
-    log(JSON.stringify(r, null, 2));
-  }
-}
-
-// --- update-core (versionNumber) ---
-// --- update-core (x.y.z) ---
-else if (base === "update-core") {
-  const version = parts[1];
-  if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
-    log("Usage: update-core (x.y.z)");
-  } else {
-    const res = await fetch(`${API}/api/core/bump`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${ADMIN_TOKEN}`
-      },
-      body: JSON.stringify({ version })
-    }).then(r => r.json());
-
-    if (res.ok) log(`✅ Core updated to ${res.version}`);
-    else log(`❌ Failed: ${res.error || "unknown error"}`);
-  }
-}
-
-
-
+        if (res.ok) log(`✅ Core updated to ${res.version}`);
+        else log(`❌ Failed: ${res.error || "unknown error"}`);
+      }
+    }
     else {
       log("Unknown command.");
       e.target.value="";
       return;
     }
-    log(JSON.stringify(r,null,2));
+    if (r) log(JSON.stringify(r,null,2));
   }catch(err){
     log("Error: "+err);
   }
@@ -648,12 +743,11 @@ async function adminAction(type, action, key) {
   });
   const data = await res.json();
   if (data.ok) {
-  notify(`✅ ${action.replace('-', ' ')} success for ${key}`, true);
-  refreshKeys && refreshKeys(type);
-} else {
-  notify(`❌ ${action.replace('-', ' ')} failed`, false);
-}
-
+    notify(`✅ ${action.replace('-', ' ')} success for ${key}`, true);
+    if (typeof refreshKeys === "function") refreshKeys(type);
+  } else {
+    notify(`❌ ${action.replace('-', ' ')} failed`, false);
+  }
 }
 
 // optional — for deleting player rows (usernames.json)
@@ -669,7 +763,7 @@ async function deletePlayer(privyId) {
   const data = await res.json();
   notify(data.ok ? `✅ Deleted ${privyId}` : `❌ Failed to delete`, data.ok);
 
-  refreshPlayers && refreshPlayers();
+  if (typeof refreshPlayers === "function") refreshPlayers();
 }
 
 function timeAgo(isoDate) {
@@ -682,14 +776,13 @@ function timeAgo(isoDate) {
   const days = Math.floor(hrs / 24);
   return `${days} day${days !== 1 ? "s" : ""} ago`;
 }  
+
 document.getElementById("popConsoleBtn").addEventListener("click", () => {
-  const consoleBox = document.getElementById("consoleBox"); // or whatever your console container ID is
+  const consoleBox = document.getElementById("consoleBox");
   if (!consoleBox) return alert("Console not found");
 
-  // Copy the current console HTML
   const content = consoleBox.outerHTML;
 
-  // Open a pop-out window
   const popup = window.open("", "dbConsolePopup", "width=800,height=600,resizable=yes,scrollbars=yes");
   popup.document.write(`
     <html>
@@ -717,9 +810,7 @@ document.getElementById("popConsoleBtn").addEventListener("click", () => {
   `);
   popup.document.close();
 });
-
 </script>
-
 
 <!-- ✅ Step 1: Notification box -->
 <div id="notifyBox"></div>
@@ -756,7 +847,6 @@ document.getElementById("popConsoleBtn").addEventListener("click", () => {
   100% { opacity:0; transform:translateY(20px); }
 }
 </style>
-
 
 </body>
 </html>
