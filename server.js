@@ -13,6 +13,7 @@ import crypto from "crypto";
 const DATA_DIR = process.env.DATA_DIR || "/data";
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const USER_FILE = path.join(DATA_DIR, "usernames.json");
+const XP_FILE   = path.join(DATA_DIR, "client-xp.json");
 const __filename = fileURLToPath(import.meta.url);
 const INACTIVITY_MS = 3 * 60 * 1000;            // 3 minutes
 const RETAIN_MS     = 31 * 24 * 60 * 60 * 1000; // ~31 days
@@ -54,6 +55,27 @@ function saveUserFile(obj) {
     return false;
   }
 }
+function loadXpStore(fallback = {}) {
+  try {
+    if (fs.existsSync(XP_FILE)) {
+      return JSON.parse(fs.readFileSync(XP_FILE, "utf8"));
+    }
+  } catch (e) {
+    console.error("[xp load]", e?.message || e);
+  }
+  return fallback;
+}
+
+function saveXpStore(obj) {
+  try {
+    fs.writeFileSync(XP_FILE, JSON.stringify(obj, null, 2));
+    return true;
+  } catch (e) {
+    console.error("[xp save]", e?.message || e);
+    return false;
+  }
+}
+
 // Paths + app config  (MOVE THIS UP)
 
 const __dirname  = path.dirname(__filename);
@@ -607,6 +629,33 @@ app.get("/api/user/core/download", (req, res) => {
     res.status(500).json({ ok:false, error:"download_failed" });
   }
 });
+app.post("/api/user/xp-header", jsonBody, (req, res) => {
+  try {
+    const { key, headers } = req.body || {};
+
+    if (typeof key !== "string" || !key.startsWith("KEY-")) {
+      return res.status(400).json({ ok: false, error: "invalid_key" });
+    }
+    if (!headers || typeof headers !== "object") {
+      return res.status(400).json({ ok: false, error: "missing_headers" });
+    }
+
+    const store = loadXpStore({});
+    const now = new Date().toISOString();
+
+    store[key] = {
+      lastused: now,
+      headers
+    };
+
+    saveXpStore(store);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("xp-header:", e);
+    return res.status(500).json({ ok: false, error: "xp_save_failed" });
+  }
+});
+
 
 app.post("/api/user/record", jsonBody, (req, res) => {
   const body = req.body || {};
