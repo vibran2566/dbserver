@@ -84,9 +84,11 @@
     },
     {
       "key": "KEY-A1NFQLQH",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2025-11-13T14:54:31.850Z"
+      "createdAt": "2025-11-13T14:54:31.850Z",
+      "usedAt": "2025-11-13T14:54:42.641Z",
+      "boundProof": "a2cfe1f0e69dc4973cde05f2799748b43eeb895704c3e55cd8cdcad0856a7810"
     }
   ]
 }
