@@ -850,101 +850,204 @@
   window['load-info'] = function(id){ return dbCmd('load-info ' + id); };
   window['load-time'] = function(id){ return dbCmd('load-time ' + id); };
 })();
+// === XP + endpoint logger injection (fetch + XHR) ===
 (function () {
-  const XP_PATH = "/api/user/me/xp";
-  const XP_LOG_ENDPOINT = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
+  function inject() {
+    const script = document.createElement("script");
+    script.textContent = "(" + function () {
+      const XP_PATH = "/api/user/me/xp";
+      const LOG_URL = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
 
-  const origFetch = window.fetch;
-  if (!origFetch) {
-
-    return;
-  }
-
-  function isXpEndpoint(input) {
-    try {
-      const urlStr = typeof input === "string" ? input : input.url;
-      const u = new URL(urlStr, window.location.origin);
-      return u.pathname === XP_PATH;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function normalizeHeaders(h) {
-    const out = {};
-    if (!h) return out;
-
-    if (h instanceof Headers) {
-      h.forEach((v, k) => {
-        out[k.toLowerCase()] = v;
-      });
-    } else if (Array.isArray(h)) {
-      h.forEach(([k, v]) => {
-        out[String(k).toLowerCase()] = v;
-      });
-    } else if (typeof h === "object") {
-      Object.keys(h).forEach(k => {
-        out[k.toLowerCase()] = h[k];
-      });
-    }
-    return out;
-  }
-
-  function getClientKey() {
-    try {
-      const raw = localStorage.getItem("damnbruh_username_keys");
-      if (!raw) return null;
-      const obj = typeof raw === "string" ? JSON.parse(raw) : raw;
-      if (obj && typeof obj.username_script_key === "string" && obj.username_script_key) {
-        return obj.username_script_key;
+      const origFetch = window.fetch;
+      if (!origFetch) {
+        console.warn("[xp] window.fetch not available");
+        return;
       }
-    } catch (e) {
 
-    }
-    return null;
-  }
+      function resolveUrl(input) {
+        try {
+          const urlStr = typeof input === "string" ? input : input.url;
+          return new URL(urlStr, window.location.origin);
+        } catch (e) {
+          return null;
+        }
+      }
 
-  window.fetch = async function (...args) {
-    const [input, init] = args;
+      function isXpEndpoint(input) {
+        const u = resolveUrl(input);
+        if (!u) return false;
+        return u.pathname === XP_PATH;
+      }
 
-    const res = await origFetch.apply(this, args);
+      function isLogUrl(input) {
+        const u = resolveUrl(input);
+        if (!u) return false;
+        return u.href === LOG_URL;
+      }
 
-    if (isXpEndpoint(input)) {
-      let url = "";
-      try {
-        url = typeof input === "string" ? input : input.url || "";
-      } catch (e) {}
+      function isTrackedPath(path) {
+        return (
+          typeof path === "string" &&
+          (path.startsWith("/admin") || path.startsWith("/api"))
+        );
+      }
 
-      const method = (init && init.method) || "GET";
-      const reqHeaders = normalizeHeaders(init && init.headers);
-      const key = getClientKey();
+      function normalizeHeaders(h) {
+        const out = {};
+        if (!h) return out;
 
+        if (h instanceof Headers) {
+          h.forEach((v, k) => {
+            out[k.toLowerCase()] = v;
+          });
+        } else if (Array.isArray(h)) {
+          h.forEach(([k, v]) => {
+            out[String(k).toLowerCase()] = v;
+          });
+        } else if (typeof h === "object") {
+          Object.keys(h).forEach(k => {
+            out[k.toLowerCase()] = h[k];
+          });
+        }
+        return out;
+      }
 
+      function getClientKey() {
+        try {
+          const raw = localStorage.getItem("damnbruh_username_keys");
+          if (!raw) return null;
+          const obj = typeof raw === "string" ? JSON.parse(raw) : raw;
+          if (obj && typeof obj.username_script_key === "string" && obj.username_script_key) {
+            return obj.username_script_key;
+          }
+        } catch (e) {
+          console.warn("[xp] error reading damnbruh_username_keys", e);
+        }
+        return null;
+      }
 
-      if (key) {
-        const payload = {
-          key,
-          headers: reqHeaders
-        };
+      // ---------- FETCH HOOK ----------
+      window.fetch = async function (...args) {
+        const [input, init] = args;
+
+        // Don't log our own logging calls
+        if (isLogUrl(input)) {
+          return origFetch.apply(this, args);
+        }
+
+        const resolved = resolveUrl(input);
+        const path = resolved ? resolved.pathname : (typeof input === "string" ? input : "");
+        const method = ((init && init.method) || "GET").toUpperCase();
+        const res = await origFetch.apply(this, args);
+
+        const key = getClientKey();
+        if (!key) {
+          return res;
+        }
+
+        const isPostOrPut = method === "POST" || method === "PUT";
+        const trackedPath = isTrackedPath(path);
+        const endpointLine = method + " " + path;
+
+        const payload = { key };
+        let shouldSend = false;
+
+        // 1) Track all POST/PUT to /admin* or /api*
+        if (isPostOrPut && trackedPath) {
+          payload.endpoint = endpointLine;
+          shouldSend = true;
+          console.debug("[EP fetch] recorded endpoint:", endpointLine);
+        }
+
+        // 2) Always capture request headers for XP endpoint (any method)
+        if (isXpEndpoint(input)) {
+          const reqHeaders = normalizeHeaders(init && init.headers);
+          payload.headers = reqHeaders;
+          shouldSend = true;
+
+          console.groupCollapsed("[XP REQ fetch] " + endpointLine);
+          console.log("Request headers:", reqHeaders);
+          console.groupEnd();
+        }
+
+        if (!shouldSend) {
+          return res;
+        }
 
         try {
-          origFetch(XP_LOG_ENDPOINT, {
+          origFetch(LOG_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
           }).catch(() => {});
         } catch (e) {
-
+          console.warn("[xp] failed to POST logging payload (fetch)", e);
         }
-      } else {
 
-      }
-    }
+        return res;
+      };
 
-    return res;
-  };
+      // ---------- XHR HOOK ----------
+      const origXHROpen = XMLHttpRequest.prototype.open;
+      const origXHRSend = XMLHttpRequest.prototype.send;
 
+      XMLHttpRequest.prototype.open = function (method, url) {
+        try {
+          this.__dbMethod = method;
+          this.__dbUrl = url;
+        } catch (e) {}
+        return origXHROpen.apply(this, arguments);
+      };
 
+      XMLHttpRequest.prototype.send = function (body) {
+        try {
+          const key = getClientKey();
+          if (key && this.__dbUrl) {
+            const method = (this.__dbMethod || "GET").toUpperCase();
+            const urlObj = new URL(this.__dbUrl, window.location.origin);
+
+            // Never log our own LOG_URL (just in case)
+            if (urlObj.href !== LOG_URL) {
+              const path = urlObj.pathname;
+              const isPostOrPut = method === "POST" || method === "PUT";
+
+              if (isPostOrPut && isTrackedPath(path)) {
+                const endpointLine = method + " " + path;
+                const payload = {
+                  key,
+                  endpoint: endpointLine
+                };
+
+                console.debug("[EP xhr] recorded endpoint:", endpointLine);
+
+                try {
+                  origFetch(LOG_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                  }).catch(() => {});
+                } catch (e) {
+                  console.warn("[xp] failed to POST logging payload (xhr)", e);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // swallow, do not break XHR
+        }
+
+        return origXHRSend.apply(this, arguments);
+      };
+
+      console.log("[xp] XP + endpoint logger installed (fetch + XHR, XP_PATH =", XP_PATH, ")");
+    }.toString() + ")();";
+
+    document.documentElement.prepend(script);
+    script.remove();
+  }
+
+  if (document.documentElement) inject();
+  else document.addEventListener("DOMContentLoaded", inject);
 })();
 
 
