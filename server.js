@@ -830,7 +830,7 @@ app.post("/api/user/record", requireUsernameKey, jsonBody, (req, res) => {
 const VERSION_PATH = path.join(__dirname, "version.json");
 
 
-app.get("/api/user/core/meta", requireUsernameKey, (req, res) => {
+app.get("/api/user/core/meta", (req, res) => {
   try {
     const sha256 = fileSha256Hex(CORE_PATH);
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
