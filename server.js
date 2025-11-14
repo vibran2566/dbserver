@@ -1164,7 +1164,7 @@ app.get("/api/core/version", requireUsernameKey, (req, res) => {
   res.json({ version: ACTIVE_VERSION });
 });
 
-app.post("/api/core/bump", requireUsernameKey, (req, res) => {
+app.post("/api/core/bump", (req, res) => {
   // auth: choose one. If you want x-admin-token:
   const hdr = req.headers["x-admin-token"];
   if (hdr !== ADMIN_TOKEN) return res.status(403).json({ error: "unauthorized" });
