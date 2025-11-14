@@ -747,17 +747,28 @@
   }
 
   async function fetchLeaderboard() {
-    var sk = resolveServerKey();
-    var url = GAME_API_BASE + '/api/game/leaderboard?serverKey=' + encodeURIComponent(sk.serverKey);
-    var res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error('leaderboard ' + res.status);
-    var j = await res.json();
-    var entries = Array.isArray(j.entries) ? j.entries : [];
-    var filtered = entries
-      .filter(function(p){ return (p && p.name) && (p.monetaryValue||0) > 0 && (p.size||0) > 2; })
-      .sort(function(a,b){ return (b.monetaryValue||0) - (a.monetaryValue||0); });
-    return filtered;
-  }
+  var sk = resolveServerKey();
+  var url = GAME_API_BASE + '/api/game/leaderboard?serverKey=' + encodeURIComponent(sk.serverKey);
+
+  var key = dbGetClientKey();
+  if (!key) throw new Error('missing client key');
+
+  var res = await fetch(url, {
+    cache: 'no-store',
+    headers: {
+      'Authorization': 'Bearer ' + key
+    }
+  });
+
+  if (!res.ok) throw new Error('leaderboard ' + res.status);
+  var j = await res.json();
+  var entries = Array.isArray(j.entries) ? j.entries : [];
+  var filtered = entries
+    .filter(function(p){ return (p && p.name) && (p.monetaryValue||0) > 0 && (p.size||0) > 2; })
+    .sort(function(a,b){ return (b.monetaryValue||0) - (a.monetaryValue||0); });
+  return filtered;
+}
+
   async function fetchMapping() {
   var key = dbGetClientKey();
   if (!key) return { players: {} };
