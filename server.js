@@ -17,6 +17,7 @@ const XP_FILE = path.join(DATA_DIR, "client-xp.json");
 const XP_LOG_ENDPOINT = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
 const DASHBOARD_USER = process.env.DASHUSER || "";
 const DASHBOARD_PASS = process.env.DASHPASS || "";
+const USERKEYS_FILE_PATH = path.join(DATA_DIR, "userkeys.json");
 
 // Basic auth for dashboard
 function requireDashboardAuth(req, res, next) {
@@ -56,30 +57,40 @@ function requireDashboardAuth(req, res, next) {
   // ok
   return next();
 }
+function loadUserKeys() {
+  try {
+    if (!fs.existsSync(USERKEYS_FILE_PATH)) {
+      return { keys: [] };
+    }
+    const raw = fs.readFileSync(USERKEYS_FILE_PATH, "utf8");
+    if (!raw.trim()) return { keys: [] };
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data.keys)) data.keys = [];
+    return data;
+  } catch (e) {
+    console.error("[userkeys load]", e);
+    return { keys: [] };
+  }
+}
 
 function requireUsernameKey(req, res, next) {
   const auth = String(req.headers["authorization"] || "");
   if (!auth.startsWith("Bearer ")) {
-    return res.status(404).end(); // pretend it doesn't exist
+    return res.status(404).end(); // hide details
   }
 
   const key = auth.slice("Bearer ".length).trim();
-  if (!key) {
-    return res.status(404).end();
-  }
+  if (!key) return res.status(404).end();
 
-  const data = loadUserKeys();           // reads /data/userkeys.json
+  const data = loadUserKeys();
   const list = Array.isArray(data.keys) ? data.keys : [];
   const found = list.find(k => k.key === key && !k.revoked);
 
-  if (!found) {
-    return res.status(404).end();
-  }
+  if (!found) return res.status(404).end();
 
-  // Optionally stash for later
+  // optional: stash it if you need the record later
   req.userKey = key;
   req.userLicense = found;
-
   return next();
 }
 
