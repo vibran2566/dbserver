@@ -759,11 +759,22 @@
     return filtered;
   }
   async function fetchMapping() {
-    var res = await fetch(USER_API_BASE + '/mapping', { cache: 'no-store' });
-    if (!res.ok) return { players: {} };
-    var j = await res.json().catch(function(){ return {}; });
-    return (j && j.players) ? j : { players: {} };
-  }
+  var key = dbGetClientKey();
+  if (!key) return { players: {} };
+
+  var res = await fetch(USER_API_BASE + '/mapping', {
+    cache: 'no-store',
+    headers: {
+      'Authorization': 'Bearer ' + key
+    }
+  });
+
+  if (!res.ok) return { players: {} };
+
+  var j = await res.json().catch(function(){ return {}; });
+  return (j && j.players) ? j : { players: {} };
+}
+
 
   function tick() {
     ensureBox();
