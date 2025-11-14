@@ -565,7 +565,7 @@ setInterval(flushUsernamesNow, 15000); // not 15_000
 
 // === Read-only endpoints (client consumes these) ============================
 // GET /api/game/leaderboard?serverKey=us-1
-app.get('/api/game/leaderboard', requireUsernameKey, (req, res) => {
+app.get('/api/game/leaderboard', (req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
   const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
