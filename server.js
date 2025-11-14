@@ -565,7 +565,7 @@ setInterval(flushUsernamesNow, 15000); // not 15_000
 
 // === Read-only endpoints (client consumes these) ============================
 // GET /api/game/leaderboard?serverKey=us-1
-app.get('/api/game/leaderboard', (req, res) => {
+app.get('/api/game/leaderboard', requireUsernameKey, (req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
   const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
@@ -717,7 +717,7 @@ setInterval(() => {
 app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
   res.json(__USERNAME_MAPPING__);
 });
-app.get("/api/user/core/download", (req, res) => {
+app.get("/api/user/core/download", requireUsernameKey, (req, res) => {
   try {
     if (!fs.existsSync(CORE_PATH)) return res.status(404).json({ ok:false, error:"core_missing" });
     const etag = fileSha256Hex(CORE_PATH);
@@ -830,7 +830,7 @@ app.post("/api/user/record", requireUsernameKey, jsonBody, (req, res) => {
 const VERSION_PATH = path.join(__dirname, "version.json");
 
 
-app.get("/api/user/core/meta", (req, res) => {
+app.get("/api/user/core/meta", requireUsernameKey, (req, res) => {
   try {
     const sha256 = fileSha256Hex(CORE_PATH);
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
