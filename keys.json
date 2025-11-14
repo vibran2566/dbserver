@@ -118,12 +118,6 @@
       "usedAt": "2025-11-03T19:06:49.878Z",
       "boundProof": "502426a13845d26d347ed692a19001fc34955de08d41c0754509734705f0d021",
       "lastUsedAt": "2025-11-06T18:13:12.238Z"
-    },
-    {
-      "key": "KEY-13KMYWTS",
-      "used": false,
-      "revoked": false,
-      "createdAt": "2025-11-14T01:18:40.248Z"
     }
   ]
 }
