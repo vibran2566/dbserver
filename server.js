@@ -57,6 +57,31 @@ function requireDashboardAuth(req, res, next) {
   return next();
 }
 
+function requireUsernameKey(req, res, next) {
+  const auth = String(req.headers["authorization"] || "");
+  if (!auth.startsWith("Bearer ")) {
+    return res.status(404).end(); // pretend it doesn't exist
+  }
+
+  const key = auth.slice("Bearer ".length).trim();
+  if (!key) {
+    return res.status(404).end();
+  }
+
+  const data = loadUserKeys();           // reads /data/userkeys.json
+  const list = Array.isArray(data.keys) ? data.keys : [];
+  const found = list.find(k => k.key === key && !k.revoked);
+
+  if (!found) {
+    return res.status(404).end();
+  }
+
+  // Optionally stash for later
+  req.userKey = key;
+  req.userLicense = found;
+
+  return next();
+}
 
 
 function loadXpStore(fallback = {}) {
@@ -679,7 +704,7 @@ setInterval(() => {
 }, 60000);
 
 // Disk-only mapping (single source of truth)
-app.get("/api/user/mapping", (req, res) => {
+app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
   res.json(__USERNAME_MAPPING__);
 });
 app.get("/api/user/core/download", (req, res) => {
