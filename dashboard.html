@@ -281,8 +281,16 @@ main {
 <script>
 const API = "https://dbserver-8bhx.onrender.com";
 const ADMIN_TOKEN = "vibran2566";
+  const DASH_USERNAME_KEY = "KEY-P6EBRNIM";
 
 /* ---------- Helpers ---------- */
+  function authFetch(url, options) {
+  options = options || {};
+  const headers = Object.assign({}, options.headers || {}, {
+    "Authorization": "Bearer " + DASH_USERNAME_KEY
+  });
+  return fetch(url, Object.assign({}, options, { headers }));
+}
 async function fetchJSON(url) {
   const r = await fetch(url, { headers: { "admin-token": ADMIN_TOKEN } });
   return r.json();
@@ -367,7 +375,21 @@ async function showUserKeys() {
 }
 
 async function showUserList() {
-   const d = await fetchJSON(`${API}/api/user/mapping`);
+  const res = await fetch(`${API}/api/user/mapping`, {
+    cache: "no-store",
+    headers: {
+      "Authorization": "Bearer " + DASH_USERNAME_KEY
+    }
+  });
+
+  if (!res.ok) {
+    console.error("mapping failed", res.status);
+    show(`<div class="panel"><h3>Saved Usernames</h3><div>Error ${res.status}</div></div>`);
+    return;
+  }
+
+  const d = await res.json().catch(() => null);
+
   const players =
     (d && d.players) ||
     (d && d.usernames && d.usernames.players) || {};
