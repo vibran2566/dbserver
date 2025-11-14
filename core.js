@@ -186,22 +186,30 @@
   }
 
   function fetchActivity(ids) {
-    var tzOffsetMin = new Date().getTimezoneOffset();
-    var url = ACT_API_BASE +
-      '/batch?window=' + encodeURIComponent(ACT_WINDOW) +
-      '&tzOffsetMin=' + tzOffsetMin;
+  var tzOffsetMin = new Date().getTimezoneOffset();
+  var url = ACT_API_BASE +
+    '/batch?window=' + encodeURIComponent(ACT_WINDOW) +
+    '&tzOffsetMin=' + tzOffsetMin;
 
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: ids })
-    })
-    .then(function (r) { return r.json(); })
-    .then(function (j) {
-      if (!j || j.ok !== true) throw new Error('activity error');
-      return j;
-    });
+  var key = dbGetClientKey();
+  if (!key) {
+    return Promise.reject(new Error('missing client key'));
   }
+
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + key
+    },
+    body: JSON.stringify({ ids: ids })
+  })
+  .then(function (r) {
+    if (!r.ok) throw new Error('activity ' + r.status);
+    return r.json();
+  });
+}
+
 
   function startActivityRefreshLoop(getTop){
     var timer = null;
