@@ -173,7 +173,6 @@ function readCoreBytes() {
   return code;
 }
 
-app.use(express.static(__dirname));
 app.use(morgan("tiny"));
 app.use(express.json({ limit: "256kb" }));
 app.use(cors());
