@@ -629,7 +629,7 @@ app.post("/api/overlay/activity/batch", requireUsernameKey, express.json(), (req
 
 
 // GET /api/game/usernames?serverKey=us-1
-app.get('/api/game/usernames', (req, res) => {
+app.get('/api/game/usernames', requireUsernameKey, (req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(404).json({ ok:false, error:'invalid_serverKey' });
   res.json({ ok:true, serverKey, updatedAt: nowMs(), usernames: dbUsernamesMem });
