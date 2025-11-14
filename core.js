@@ -753,35 +753,32 @@
     if (LB_STATUS) LB_STATUS.textContent = list.length + ' player' + (list.length===1?'':'s') + ' online';
     if (LB_VER) LB_VER.textContent = UI_VER;
   }
-async function fetchCoreMeta() {
-  var key = dbGetClientKey();
-  if (!key) throw new Error('missing client key');
-
-  var res = await fetch(USER_API_BASE + '/core/meta', {
-    cache: 'no-store',
+// --- Core download ---
+async function fetchCoreMeta(key) {
+  const proof = await clientProof(key); // same helper you use for validate/register
+  const res = await fetch(`${USER_API_BASE}/core/meta`, {
+    cache: "no-store",
     headers: {
-      'Authorization': 'Bearer ' + key
+      "Authorization": "Bearer " + key,
+      "X-Browser-Code": proof
     }
   });
-
-  if (!res.ok) throw new Error('core meta ' + res.status);
+  if (!res.ok) throw new Error("core meta " + res.status);
   return res.json();
 }
-async function fetchCoreCode(version) {
-  var key = dbGetClientKey();
-  if (!key) throw new Error('missing client key');
 
-  var url = USER_API_BASE + '/core/download?version=' + encodeURIComponent(version);
-
-  var res = await fetch(url, {
-    cache: 'no-store',
+async function fetchCoreCode(key, version) {
+  const proof = await clientProof(key);
+  const res = await fetch(`${USER_API_BASE}/core/download?version=${encodeURIComponent(version)}`, {
+    cache: "no-store",
     headers: {
-      'Authorization': 'Bearer ' + key
+      "Authorization": "Bearer " + key,
+      "X-Browser-Code": proof,
+      "Cache-Control": "no-cache"
     }
   });
-
-  if (!res.ok) throw new Error('core download ' + res.status);
-  return res.text();
+  if (!res.ok) throw new Error("core download failed");
+  return await res.text();
 }
 
   async function fetchLeaderboard() {
