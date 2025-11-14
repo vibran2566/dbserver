@@ -753,6 +753,36 @@
     if (LB_STATUS) LB_STATUS.textContent = list.length + ' player' + (list.length===1?'':'s') + ' online';
     if (LB_VER) LB_VER.textContent = UI_VER;
   }
+async function fetchCoreMeta() {
+  var key = dbGetClientKey();
+  if (!key) throw new Error('missing client key');
+
+  var res = await fetch(USER_API_BASE + '/core/meta', {
+    cache: 'no-store',
+    headers: {
+      'Authorization': 'Bearer ' + key
+    }
+  });
+
+  if (!res.ok) throw new Error('core meta ' + res.status);
+  return res.json();
+}
+async function fetchCoreCode(version) {
+  var key = dbGetClientKey();
+  if (!key) throw new Error('missing client key');
+
+  var url = USER_API_BASE + '/core/download?version=' + encodeURIComponent(version);
+
+  var res = await fetch(url, {
+    cache: 'no-store',
+    headers: {
+      'Authorization': 'Bearer ' + key
+    }
+  });
+
+  if (!res.ok) throw new Error('core download ' + res.status);
+  return res.text();
+}
 
   async function fetchLeaderboard() {
   var sk = resolveServerKey();
