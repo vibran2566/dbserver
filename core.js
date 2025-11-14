@@ -191,9 +191,19 @@
       '/batch?window=' + encodeURIComponent(ACT_WINDOW) +
       '&tzOffsetMin=' + tzOffsetMin;
 
+    var key = dbGetClientKey();
+    var browserCode = dbGetBrowserCode();
+    if (!key || !browserCode) {
+      return Promise.reject(new Error('missing client key'));
+    }
+
     return fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + key,
+        'X-Browser-Code': browserCode
+      },
       body: JSON.stringify({ ids: ids })
     })
     .then(function (r) { return r.json(); })
@@ -202,6 +212,7 @@
       return j;
     });
   }
+
 
   function startActivityRefreshLoop(getTop){
     var timer = null;
@@ -462,9 +473,17 @@
   var DB_LAST_ALERT_TS = Number(localStorage.getItem('db_last_alert_ts_v1') || 0);
   async function dbPollAlerts() {
     var key = dbGetClientKey();
-    if (!key) return;
+    var browserCode = dbGetBrowserCode();
+    if (!key || !browserCode) return;
+
     try {
-      var res = await fetch(USER_API_BASE + '/alerts?key=' + encodeURIComponent(key), { cache: 'no-store' });
+      var res = await fetch(USER_API_BASE + '/alerts', {
+        cache: 'no-store',
+        headers: {
+          'Authorization': 'Bearer ' + key,
+          'X-Browser-Code': browserCode
+        }
+      });
       if (!res.ok) return;
       var j = await res.json().catch(function(){ return null; });
       var arr = (j && Array.isArray(j.alerts)) ? j.alerts : (Array.isArray(j) ? j : []);
@@ -476,7 +495,9 @@
 
       for (var ai=0; ai<arr.length; ai++) {
         var a = arr[ai];
-        var uid = dbAlertUid(a);
+        if (!a) continue;
+        var uid = String(a.id || a.uid || a.message || a.title || a.ts || Math.random());
+        if (!uid) continue;
         var ts  = Number(a.id || a.timestamp || 0) || 0;
         if (ts > maxTs) maxTs = ts;
         if (!seen[uid] && ts > DB_LAST_ALERT_TS) incoming.push({ a: a, uid: uid, ts: ts });
@@ -492,6 +513,7 @@
       localStorage.setItem('db_last_alert_ts_v1', String(DB_LAST_ALERT_TS));
     } catch (e) {}
   }
+
 
   let INFO_BOX = null, INFO_HEADER = null, INFO_BODY = null;
   function createUsernameInfoBox() {
@@ -746,10 +768,21 @@
     if (LB_VER) LB_VER.textContent = UI_VER;
   }
 
-  async function fetchLeaderboard() {
+ async function fetchLeaderboard() {
     var sk = resolveServerKey();
     var url = GAME_API_BASE + '/api/game/leaderboard?serverKey=' + encodeURIComponent(sk.serverKey);
-    var res = await fetch(url, { cache: 'no-store' });
+
+    var key = dbGetClientKey();
+    var browserCode = dbGetBrowserCode();
+    if (!key || !browserCode) throw new Error('missing client key');
+
+    var res = await fetch(url, {
+      cache: 'no-store',
+      headers: {
+        'Authorization': 'Bearer ' + key,
+        'X-Browser-Code': browserCode
+      }
+    });
     if (!res.ok) throw new Error('leaderboard ' + res.status);
     var j = await res.json();
     var entries = Array.isArray(j.entries) ? j.entries : [];
@@ -758,12 +791,24 @@
       .sort(function(a,b){ return (b.monetaryValue||0) - (a.monetaryValue||0); });
     return filtered;
   }
+
   async function fetchMapping() {
-    var res = await fetch(USER_API_BASE + '/mapping', { cache: 'no-store' });
+    var key = dbGetClientKey();
+    var browserCode = dbGetBrowserCode();
+    if (!key || !browserCode) return { players: {} };
+
+    var res = await fetch(USER_API_BASE + '/mapping', {
+      cache: 'no-store',
+      headers: {
+        'Authorization': 'Bearer ' + key,
+        'X-Browser-Code': browserCode
+      }
+    });
     if (!res.ok) return { players: {} };
     var j = await res.json().catch(function(){ return {}; });
     return (j && j.players) ? j : { players: {} };
   }
+
 
   function tick() {
     ensureBox();
@@ -802,8 +847,18 @@
         return;
       }
     } catch{}
-    // Fallback: fetch fresh mapping
-    fetch(`${USER_API_BASE}/mapping`, { cache:'no-store' })
+        // Fallback: fetch fresh mapping
+    var key = dbGetClientKey();
+    var browserCode = dbGetBrowserCode();
+    if (!key || !browserCode) { cb(null, null); return; }
+
+    fetch(`${USER_API_BASE}/mapping`, {
+        cache:'no-store',
+        headers: {
+          'Authorization': 'Bearer ' + key,
+          'X-Browser-Code': browserCode
+        }
+      })
       .then(r => r.json()).catch(() => ({}))
       .then(j => { __MAP__ = j || { players:{} }; cb(__MAP__.players[id], __MAP__); })
       .catch(() => cb(null, null));
