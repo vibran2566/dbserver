@@ -629,11 +629,27 @@ app.post("/api/overlay/activity/batch", requireUsernameKey, express.json(), (req
 
 
 // GET /api/game/usernames?serverKey=us-1
+// Protected usernames list — requires Authorization: Bearer <username_key>
 app.get('/api/game/usernames', requireUsernameKey, (req, res) => {
-  const serverKey = String(req.query.serverKey || '');
-  if (!DB_SHARDS.includes(serverKey)) return res.status(404).json({ ok:false, error:'invalid_serverKey' });
-  res.json({ ok:true, serverKey, updatedAt: nowMs(), usernames: dbUsernamesMem });
+  try {
+    const serverKey = String(req.query.serverKey || '');
+    if (!DB_SHARDS.includes(serverKey)) {
+      return res.status(404).json({ ok: false, error: 'invalid_serverKey' });
+    }
+
+    // If you want to restrict what the dashboard sees, you can clone/filter dbUsernamesMem here.
+    return res.json({
+      ok: true,
+      serverKey,
+      updatedAt: nowMs(),
+      usernames: dbUsernamesMem
+    });
+  } catch (err) {
+    console.error('/api/game/usernames:', err);
+    return res.status(500).json({ ok: false, error: 'server_error' });
+  }
 });
+
 
 // Paths
 
