@@ -16,105 +16,6 @@ const USER_FILE = path.join(DATA_DIR, "usernames.json");
 const XP_FILE = path.join(DATA_DIR, "client-xp.json");
 const XP_LOG_ENDPOINT = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
 
-// === User license auth middleware + logging ======================
-const AUTH_LOG_FILE = path.join(DATA_DIR, "userkey-auth.log");
-
-function logUserAuthAttempt(entry) {
-  try {
-    const line = JSON.stringify(entry) + "\n";
-    fs.appendFile(AUTH_LOG_FILE, line, () => {});
-  } catch (e) {}
-}
-
-// Simple retention: keep ~7 days of attempts, trim every 6h
-setInterval(() => {
-  try {
-    if (!fs.existsSync(AUTH_LOG_FILE)) return;
-    const text = fs.readFileSync(AUTH_LOG_FILE, "utf8");
-    const lines = text.split("\n").filter(Boolean);
-    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
-    const kept = lines.filter(line => {
-      try {
-        const obj = JSON.parse(line);
-        const t = new Date(obj.ts || obj.time || 0).getTime();
-        return t && t >= cutoff;
-      } catch {
-        return false;
-      }
-    });
-
-    fs.writeFileSync(
-      AUTH_LOG_FILE,
-      kept.join("\n") + (kept.length ? "\n" : "")
-    );
-  } catch (e) {
-    console.error("auth-log-retention:", e);
-  }
-}, 6 * 60 * 60 * 1000);
-
-// Middleware: require a valid USERKEYS license + per-browser code
-// Middleware: require a valid USERKEYS license + per-browser code
-function requireUserLicense(req, res, next) {
-  const auth = String(req.headers["authorization"] || "");
-  const browserCode = String(req.headers["x-browser-code"] || "");
-  const ua = String(req.headers["user-agent"] || "");
-  const ip = String(
-    req.headers["x-forwarded-for"] || req.socket?.remoteAddress || ""
-  );
-
-  const fail = (reason) => {
-    logUserAuthAttempt({
-      ts: new Date().toISOString(),
-      ip,
-      method: req.method,
-      path: req.path,
-      ok: false,
-      reason
-    });
-    // 🔒 Pretend it doesn't exist
-    return res.status(404).end();
-  };
-
-  if (!auth.startsWith("Bearer ")) return fail("missing_auth");
-  if (!browserCode) return fail("missing_browser_code");
-  if (!ua) return fail("missing_ua");
-
-  const key = auth.slice("Bearer ".length).trim();
-  if (!key) return fail("empty_key");
-
-  try {
-    const data = loadUserKeys();
-    const list = Array.isArray(data.keys) ? data.keys : [];
-    const found = list.find(k => k.key === key);
-
-    if (!found) return fail("not_found");
-    if (found.revoked) return fail("revoked");
-    if (!found.used) return fail("not_used");
-    if (!found.browserCode || !found.browserUA) return fail("not_bound");
-
-    if (String(found.browserCode) !== browserCode)
-      return fail("browser_code_mismatch");
-    if (String(found.browserUA) !== ua)
-      return fail("ua_mismatch");
-
-    logUserAuthAttempt({
-      ts: new Date().toISOString(),
-      ip,
-      method: req.method,
-      path: req.path,
-      ok: true,
-      reason: "ok"
-    });
-
-    req.userLicense = { key, record: found };
-    return next();
-  } catch (err) {
-    console.error("requireUserLicense:", err);
-    return fail("exception");
-  }
-}
-
 
 function loadXpStore(fallback = {}) {
   try {
@@ -209,35 +110,9 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_TOKEN          = process.env.ADMIN_TOKEN || "";
 const GITHUB_TOKEN         = process.env.GITHUB_TOKEN;
 const GITHUB_REPO          = process.env.GITHUB_REPO;
-const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json"; // size script (still GitHub)
-const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || path.join(DATA_DIR, "userkeys.json");
-const USERNAMES_FILE_PATH  = path.join(DATA_DIR, "usernames.json");
-
-function loadUserKeys() {
-  try {
-    if (!fs.existsSync(USERKEYS_FILE_PATH)) {
-      return { keys: [] };
-    }
-    const raw = fs.readFileSync(USERKEYS_FILE_PATH, "utf8");
-    if (!raw.trim()) return { keys: [] };
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data.keys)) data.keys = [];
-    return data;
-  } catch (e) {
-    console.error("[userkeys load]", e?.message || e);
-    return { keys: [] };
-  }
-}
-
-function saveUserKeys(data) {
-  try {
-    fs.writeFileSync(USERKEYS_FILE_PATH, JSON.stringify(data, null, 2));
-    return true;
-  } catch (e) {
-    console.error("[userkeys save]", e?.message || e);
-    return false;
-  }
-}
+const GITHUB_FILE_PATH     = process.env.GITHUB_FILE_PATH     || "keys.json";
+const USERKEYS_FILE_PATH   = process.env.USERKEYS_FILE_PATH   || "userkeys.json";
+const USERNAMES_FILE_PATH = path.join(DATA_DIR, "usernames.json");
 
 
 // --- Core version + meta helpers ---
@@ -256,6 +131,7 @@ function readCoreBytes() {
   return code;
 }
 
+app.use(express.static(__dirname));
 app.use(morgan("tiny"));
 app.use(express.json({ limit: "256kb" }));
 app.use(cors());
@@ -274,37 +150,22 @@ async function writeVersionJSON(v) {
 
 // --- sync the version onto every app key record in both key files ---
 async function syncCoreVersionAcrossKeys(newVersion) {
-  const FIELDS = ["coreVersion", "requiredCore", "version"];
-
-  // 1) Size script keys still in GitHub (keys.json)
-  try {
-    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+  const files = [GITHUB_FILE_PATH, USERKEYS_FILE_PATH]; // size keys + username keys
+  for (const FILE of files) {
+    const { data, sha } = await ghLoad(FILE, { keys: [] });
     let changed = false;
+
+    // set whichever field name you actually use in your admin panel
+    const FIELDS = ["coreVersion", "requiredCore", "version"];
     for (const k of (data.keys || [])) {
       for (const f of FIELDS) {
         if (k[f] !== newVersion) { k[f] = newVersion; changed = true; }
       }
     }
-    if (changed) await ghSave(GITHUB_FILE_PATH, data, sha);
-  } catch (e) {
-    console.error("syncCoreVersion size-keys:", e?.message || e);
-  }
 
-  // 2) Username script keys now on disk (/data/userkeys.json)
-  try {
-    const data = loadUserKeys();
-    let changed = false;
-    for (const k of (data.keys || [])) {
-      for (const f of FIELDS) {
-        if (k[f] !== newVersion) { k[f] = newVersion; changed = true; }
-      }
-    }
-    if (changed) saveUserKeys(data);
-  } catch (e) {
-    console.error("syncCoreVersion userkeys:", e?.message || e);
+    if (changed) await ghSave(FILE, data, sha);
   }
 }
-
 
 // === DamnBruh shard polling & usernames (ADD) ===============================
 // Poll these 6 shards every 5s (server-side only; client never hits /players)
@@ -628,7 +489,7 @@ setInterval(flushUsernamesNow, 15000); // not 15_000
 
 // === Read-only endpoints (client consumes these) ============================
 // GET /api/game/leaderboard?serverKey=us-1
-app.get('/api/game/leaderboard', requireUserLicense,(req, res) => {
+app.get('/api/game/leaderboard', (req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
   const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
@@ -659,7 +520,7 @@ app.get("/api/overlay/activity", (req, res) => {
 
 
 // POST /api/overlay/activity/batch
-app.post("/api/overlay/activity/batch", requireUserLicense, express.json(), (req, res) => {
+app.post("/api/overlay/activity/batch", express.json(), (req, res) => {
   try {
     const body = req.body || {};
     let ids = Array.isArray(body.ids) ? body.ids : [];
@@ -692,7 +553,7 @@ app.post("/api/overlay/activity/batch", requireUserLicense, express.json(), (req
 
 
 // GET /api/game/usernames?serverKey=us-1
-app.get('/api/game/usernames', requireUserLicense, (req, res) => {
+app.get('/api/game/usernames', (req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
   res.json({ ok:true, serverKey, updatedAt: nowMs(), usernames: dbUsernamesMem });
@@ -777,7 +638,7 @@ setInterval(() => {
 }, 60000);
 
 // Disk-only mapping (single source of truth)
-app.get("/api/user/mapping", requireUserLicense, (req, res) => {
+app.get("/api/user/mapping", (req, res) => {
   res.json(__USERNAME_MAPPING__);
 });
 app.get("/api/user/core/download", (req, res) => {
@@ -868,7 +729,7 @@ app.post("/api/user/admin/client-xp/delete", jsonBody, (req, res) => {
 
 
 
-app.post("/api/user/record", requireUserLicense, jsonBody, (req, res) => {
+app.post("/api/user/record", jsonBody, (req, res) => {
   const body = req.body || {};
   const arr = Array.isArray(body)
     ? body
@@ -893,7 +754,7 @@ app.post("/api/user/record", requireUserLicense, jsonBody, (req, res) => {
 const VERSION_PATH = path.join(__dirname, "version.json");
 
 
-app.get("/api/user/core/meta", requireUserLicense, (req, res) => {
+app.get("/api/user/core/meta", (req, res) => {
   try {
     const sha256 = fileSha256Hex(CORE_PATH);
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
@@ -918,7 +779,7 @@ app.post("/api/user/admin/flush-now", jsonBody, async (req, res) => {
   }
 });
 // 🕐 username join queue
-app.get("/api/user/debug/state", requireUserLicense, async (req, res) => {
+app.get("/api/user/debug/state", async (req, res) => {
   try {
     let size = 0, mtime = null;
     try {
@@ -1223,7 +1084,7 @@ app.post("/api/validate", async (req, res) => {
 // Serve current version
 
 
-app.get("/api/core/version", requireUserLicense, (req, res) => {
+app.get("/api/core/version", (req, res) => {
   res.json({ version: ACTIVE_VERSION });
 });
 
@@ -1252,60 +1113,30 @@ app.post("/api/core/bump", (req, res) => {
 
 
 
-app.post("/api/user/register", async (req, res) => {
+app.post("/api/register", async (req, res) => {
   const { key, proof } = req.body || {};
-  if (!key)  return res.status(400).json({ ok:false, error:"missing_key" });
+  if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
   if (!proof) return res.status(400).json({ ok:false, error:"missing_proof" });
-
   try {
-    const data = loadUserKeys();
-    res.json(data);
-    const list = Array.isArray(data.keys) ? data.keys : [];
-    const f = list.find(k => k.key === key);
-
-    if (!f)        return res.status(404).json({ ok:false, error:"not_found" });
-    if (f.revoked) return res.status(403).json({ ok:false, error:"revoked" });
-
-    const ua = String(req.headers["user-agent"] || "");
-
-    // Already used
-    if (f.used) {
-      if (f.boundProof && String(proof) === String(f.boundProof)) {
-        // Upgrade old keys that don't yet have browser binding
-        if (!f.browserCode || !f.browserUA) {
-          f.browserCode = crypto.randomBytes(24).toString("hex");
-          f.browserUA   = ua;
-          f.lastUsedAt  = new Date().toISOString();
-          await ghSave(USERKEYS_FILE_PATH, data, sha);
-        }
-        return res.json({
-          ok: true,
-          used: true,
-          bound: true,
-          already: true,
-          browserCode: f.browserCode || null
-        });
-      }
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
+    if (!found) return res.status(404).json({ ok:false, error:"not_found" });
+    if (found.revoked) return res.status(403).json({ ok:false, error:"revoked" });
+    if (found.used) {
+      if (found.boundProof && proof === found.boundProof)
+        return res.json({ ok:true, used:true, bound:true, already:true });
       return res.status(409).json({ ok:false, used:true, error:"already_used" });
     }
-
-    // First-time use: bind proof + browser
-    const nowIso = new Date().toISOString();
-    f.used       = true;
-    f.usedAt     = nowIso;
-    f.boundProof = String(proof);
-    f.browserCode = crypto.randomBytes(24).toString("hex");
-    f.browserUA   = ua;
-    f.lastUsedAt  = nowIso;
-
-    await ghSave(USERKEYS_FILE_PATH, data, sha);
-    res.json({ ok:true, used:true, bound:true, browserCode: f.browserCode });
+    found.used = true;
+    found.usedAt = new Date().toISOString();
+    found.boundProof = String(proof);
+    await ghSave(GITHUB_FILE_PATH, data, sha);
+    res.json({ ok:true, used:true, bound:true });
   } catch (err) {
-    console.error("user-register:", err);
+    console.error("register:", err);
     res.status(500).json({ ok:false, error:"write_failed" });
   }
 });
-
 
 /* =======================================================
    =============== USERNAME SYSTEM (new) =================
@@ -1316,9 +1147,8 @@ app.get("/api/user/admin/list-keys", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
     return res.status(401).json({ ok:false, error:"unauthorized" });
   try {
-    const data = loadUserKeys();
-res.json(data);
-
+    const { data } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    res.json(data);
   } catch (err) {
     console.error("user-list:", err);
     res.status(500).json({ ok:false, error:"read_failed" });
@@ -1333,13 +1163,13 @@ app.post("/api/admin/add-note", async (req, res) => {
     return res.status(400).json({ ok: false, error: "missing_fields" });
 
   try {
-    const data = loadUserKeys();
+    const { data, sha } = await ghLoad(GITHUB_FILE_PATH, { keys: [] });
     const found = data.keys.find(k => k.key === key);
     if (!found)
       return res.status(404).json({ ok: false, error: "not_found" });
 
     found.note = note.trim();
-   saveUserKeys(data);
+    await ghSave(GITHUB_FILE_PATH, data, sha);
     res.json({ ok: true, message: `Note added to ${key}` });
   } catch (err) {
     console.error("add-note:", err);
@@ -1353,11 +1183,11 @@ app.post("/api/user/admin/add-keys", async (req, res) => {
     return res.status(401).json({ ok:false, error:"unauthorized" });
   const count = req.body.count || 1;
   try {
-    const data = loadUserKeys();
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
     for (let i=0;i<count;i++){
       data.keys.push({ key:genKey(), used:false, revoked:false, createdAt:new Date().toISOString() });
     }
-    saveUserKeys(data);
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
     res.json({ ok:true, added:count });
   } catch(err){ console.error("user-add:",err); res.status(500).json({ok:false,error:"write_failed"}); }
 });
@@ -1369,10 +1199,10 @@ app.post("/api/user/admin/delete-key", async (req, res) => {
   if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
 
   try {
-   const data = loadUserKeys();
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
     const before = data.keys.length;
     data.keys = data.keys.filter(k => k.key !== key);
-    saveUserKeys(data);
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
     res.json({ ok:true, removed: before - data.keys.length });
   } catch (err) {
     console.error("user-delete-key:", err);
@@ -1387,7 +1217,7 @@ app.post("/api/user/admin/unuse-key", async (req, res) => {
   if (!key) return res.status(400).json({ ok:false, error:"missing_key" });
 
   try {
-    const data = loadUserKeys();
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
     const found = data.keys.find(k => k.key === key);
     if (!found) return res.status(404).json({ ok:false, error:"not_found" });
 
@@ -1395,7 +1225,7 @@ app.post("/api/user/admin/unuse-key", async (req, res) => {
     delete found.usedAt;
     delete found.boundProof;
 
-    saveUserKeys(data);
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
     res.json({ ok:true, message:`${key} reset to unused` });
   } catch (err) {
     console.error("user-unuse-key:", err);
@@ -1411,12 +1241,12 @@ app.post("/api/user/admin/add-note", async (req, res) => {
     return res.status(400).json({ ok:false, error:"missing_fields" });
 
   try {
-    const data = loadUserKeys();
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
     const found = data.keys.find(k => k.key === key);
     if (!found) return res.status(404).json({ ok:false, error:"not_found" });
 
     found.note = note.trim();
-   saveUserKeys(data);
+    await ghSave(USERKEYS_FILE_PATH, data, sha);
     res.json({ ok:true, message:`Note added to ${key}` });
   } catch (err) {
     console.error("user-add-note:", err);
@@ -1445,11 +1275,11 @@ app.post("/api/user/admin/revoke", async (req,res)=>{
   const {key}=req.body;
   if(!key)return res.status(400).json({ok:false,error:"missing_key"});
   try{
-    const data = loadUserKeys();
+    const {data,sha}=await ghLoad(USERKEYS_FILE_PATH,{keys:[]});
     const found=data.keys.find(k=>k.key===key);
     if(!found)return res.status(404).json({ok:false,error:"not_found"});
     found.revoked=true;
-    saveUserKeys(data);
+    await ghSave(USERKEYS_FILE_PATH,data,sha);
     res.json({ok:true});
   }catch(err){console.error("user-revoke:",err);res.status(500).json({ok:false,error:"write_failed"});}
 });
@@ -1460,8 +1290,8 @@ app.post("/api/user/validate", async (req, res) => {
     return res.status(400).json({ ok: false, error: "missing_key" });
 
   try {
-    const data = loadUserKeys();
-const found = data.keys.find(k => k.key === key);
+    const { data, sha } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const found = data.keys.find(k => k.key === key);
 
     if (!found)
       return res.status(404).json({ ok: false, error: "not_found" });
@@ -1475,7 +1305,7 @@ const found = data.keys.find(k => k.key === key);
       // ✅ same logic: update lastUsedAt and save
       try {
         found.lastUsedAt = new Date().toISOString();
-       saveUserKeys(data);
+        await ghSave(USERKEYS_FILE_PATH, data, sha);
       } catch (err) {
         console.error("Failed to update lastUsedAt (user):", err);
       }
@@ -1497,8 +1327,8 @@ app.post("/api/user/register", async (req,res)=>{
   if(!key)return res.status(400).json({ok:false,error:"missing_key"});
   if(!proof)return res.status(400).json({ok:false,error:"missing_proof"});
   try{
-    const data = loadUserKeys();
-const f = data.keys.find(k => k.key === key);
+    const {data,sha}=await ghLoad(USERKEYS_FILE_PATH,{keys:[]});
+    const f=data.keys.find(k=>k.key===key);
     if(!f)return res.status(404).json({ok:false,error:"not_found"});
     if(f.revoked)return res.status(403).json({ok:false,error:"revoked"});
     if(f.used){
@@ -1506,10 +1336,8 @@ const f = data.keys.find(k => k.key === key);
         return res.json({ok:true,used:true,bound:true,already:true});
       return res.status(409).json({ok:false,used:true,error:"already_used"});
     }
-   f.used = true;
-f.usedAt = new Date().toISOString();
-f.boundProof = String(proof);
-saveUserKeys(data);
+    f.used=true; f.usedAt=new Date().toISOString(); f.boundProof=String(proof);
+    await ghSave(USERKEYS_FILE_PATH,data,sha);
     res.json({ok:true,used:true,bound:true});
   }catch(err){console.error("user-register:",err);res.status(500).json({ok:false,error:"write_failed"});}
 });
@@ -1542,14 +1370,5 @@ app.get("/api/user/alerts", async (req, res) => {
 app.get("/", (req,res)=>
   res.send("✅ Combined License + Username Tracker Active")
 );
-// Serve the admin dashboard HTML without exposing everything else
-app.get("/dashboard.html", (req, res) => {
-  res.sendFile(path.join(__dirname, "dashboard.html"));
-});
-
-// Optional: /dashboard → /dashboard.html
-app.get("/dashboard", (req, res) => {
-  res.redirect("/dashboard.html");
-});
 
 app.listen(PORT, ()=> console.log(`✅ Combined server running on :${PORT}`));
