@@ -1542,5 +1542,14 @@ app.get("/api/user/alerts", async (req, res) => {
 app.get("/", (req,res)=>
   res.send("✅ Combined License + Username Tracker Active")
 );
+// Serve the admin dashboard HTML without exposing everything else
+app.get("/dashboard.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "dashboard.html"));
+});
+
+// Optional: /dashboard → /dashboard.html
+app.get("/dashboard", (req, res) => {
+  res.redirect("/dashboard.html");
+});
 
 app.listen(PORT, ()=> console.log(`✅ Combined server running on :${PORT}`));
