@@ -17,7 +17,6 @@ const XP_FILE = path.join(DATA_DIR, "client-xp.json");
 const XP_LOG_ENDPOINT = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
 const DASHBOARD_USER = process.env.DASHUSER || "";
 const DASHBOARD_PASS = process.env.DASHPASS || "";
-const USERKEYS_FILE_PATH = path.join(DATA_DIR, "userkeys.json");
 
 // Basic auth for dashboard
 function requireDashboardAuth(req, res, next) {
