@@ -28,16 +28,14 @@
     },
     {
       "key": "KEY-7BJ09GB9",
-      "used": true,
+      "used": false,
       "revoked": false,
       "createdAt": "2025-10-29T13:19:26.577Z",
       "note": "vibran LT",
       "lastUsedAt": "2025-11-13T22:30:31.580Z",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
-      "version": "1.1.1",
-      "usedAt": "2025-11-13T07:22:59.283Z",
-      "boundProof": "d882ac39bd12fc6713da7899efaea94c9f69d3c9bcd5b8024a134c5bb645aec6"
+      "version": "1.1.1"
     },
     {
       "key": "KEY-P6EBRNIM",
