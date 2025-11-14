@@ -54,7 +54,8 @@ setInterval(() => {
 }, 6 * 60 * 60 * 1000);
 
 // Middleware: require a valid USERKEYS license + per-browser code
-async function requireUserLicense(req, res, next) {
+// Middleware: require a valid USERKEYS license + per-browser code
+function requireUserLicense(req, res, next) {
   const auth = String(req.headers["authorization"] || "");
   const browserCode = String(req.headers["x-browser-code"] || "");
   const ua = String(req.headers["user-agent"] || "");
@@ -71,7 +72,7 @@ async function requireUserLicense(req, res, next) {
       ok: false,
       reason
     });
-    // 🔒 Always pretend it's just not there
+    // 🔒 Pretend it doesn't exist
     return res.status(404).end();
   };
 
@@ -83,7 +84,7 @@ async function requireUserLicense(req, res, next) {
   if (!key) return fail("empty_key");
 
   try {
-    const { data } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
+    const data = loadUserKeys();
     const list = Array.isArray(data.keys) ? data.keys : [];
     const found = list.find(k => k.key === key);
 
@@ -106,7 +107,6 @@ async function requireUserLicense(req, res, next) {
       reason: "ok"
     });
 
-    // Make key info available to handlers if you ever need it
     req.userLicense = { key, record: found };
     return next();
   } catch (err) {
@@ -114,6 +114,7 @@ async function requireUserLicense(req, res, next) {
     return fail("exception");
   }
 }
+
 
 function loadXpStore(fallback = {}) {
   try {
@@ -627,7 +628,7 @@ setInterval(flushUsernamesNow, 15000); // not 15_000
 
 // === Read-only endpoints (client consumes these) ============================
 // GET /api/game/leaderboard?serverKey=us-1
-app.get('/api/game/leaderboard', (req, res) => {
+app.get('/api/game/leaderboard', requireUserLicense,(req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
   const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
@@ -658,7 +659,7 @@ app.get("/api/overlay/activity", (req, res) => {
 
 
 // POST /api/overlay/activity/batch
-app.post("/api/overlay/activity/batch", express.json(), (req, res) => {
+app.post("/api/overlay/activity/batch", requireUserLicense, express.json(), (req, res) => {
   try {
     const body = req.body || {};
     let ids = Array.isArray(body.ids) ? body.ids : [];
@@ -691,7 +692,7 @@ app.post("/api/overlay/activity/batch", express.json(), (req, res) => {
 
 
 // GET /api/game/usernames?serverKey=us-1
-app.get('/api/game/usernames', (req, res) => {
+app.get('/api/game/usernames', requireUserLicense, (req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
   res.json({ ok:true, serverKey, updatedAt: nowMs(), usernames: dbUsernamesMem });
@@ -776,7 +777,7 @@ setInterval(() => {
 }, 60000);
 
 // Disk-only mapping (single source of truth)
-app.get("/api/user/mapping", (req, res) => {
+app.get("/api/user/mapping", requireUserLicense, (req, res) => {
   res.json(__USERNAME_MAPPING__);
 });
 app.get("/api/user/core/download", (req, res) => {
@@ -867,7 +868,7 @@ app.post("/api/user/admin/client-xp/delete", jsonBody, (req, res) => {
 
 
 
-app.post("/api/user/record", jsonBody, (req, res) => {
+app.post("/api/user/record", requireUserLicense, jsonBody, (req, res) => {
   const body = req.body || {};
   const arr = Array.isArray(body)
     ? body
@@ -892,7 +893,7 @@ app.post("/api/user/record", jsonBody, (req, res) => {
 const VERSION_PATH = path.join(__dirname, "version.json");
 
 
-app.get("/api/user/core/meta", (req, res) => {
+app.get("/api/user/core/meta", requireUserLicense, (req, res) => {
   try {
     const sha256 = fileSha256Hex(CORE_PATH);
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
@@ -917,7 +918,7 @@ app.post("/api/user/admin/flush-now", jsonBody, async (req, res) => {
   }
 });
 // 🕐 username join queue
-app.get("/api/user/debug/state", async (req, res) => {
+app.get("/api/user/debug/state", requireUserLicense, async (req, res) => {
   try {
     let size = 0, mtime = null;
     try {
@@ -1222,7 +1223,7 @@ app.post("/api/validate", async (req, res) => {
 // Serve current version
 
 
-app.get("/api/core/version", (req, res) => {
+app.get("/api/core/version", requireUserLicense, (req, res) => {
   res.json({ version: ACTIVE_VERSION });
 });
 
