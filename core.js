@@ -452,6 +452,20 @@
     }catch(e){}
     return null;
   }
+    function dbGetBrowserCode(){
+    try{
+      var rawLS = localStorage.getItem('damnbruh_username_keys');
+      var rawGM = (typeof GM_getValue==='function') ? GM_getValue('damnbruh_username_keys', null) : null;
+      var raw = (rawLS != null ? rawLS : rawGM);
+      if (raw){
+        var obj = (typeof raw==='string') ? JSON.parse(raw) : raw;
+        if (obj && typeof obj.username_browser_code === 'string' && obj.username_browser_code)
+          return obj.username_browser_code;
+      }
+    }catch(e){}
+    return null;
+  }
+
   function dbSeenStore(get){
     var k='db_seen_alerts_v1';
     if (get){
@@ -466,6 +480,7 @@
       };
     }
   }
+  
   function dbAlertUid(a){
     var cand = (a && (a.id||a.uuid||a.uid||a.ts||a.timestamp||a.time||a.createdAt||a.expiresAt||a.message)) || Math.random();
     return String(cand).slice(0,128);
