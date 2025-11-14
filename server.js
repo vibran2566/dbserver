@@ -565,7 +565,7 @@ setInterval(flushUsernamesNow, 15000); // not 15_000
 
 // === Read-only endpoints (client consumes these) ============================
 // GET /api/game/leaderboard?serverKey=us-1
-app.get('/api/game/leaderboard', (req, res) => {
+app.get('/api/game/leaderboard', requireUsernameKey, (req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
   const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
@@ -573,7 +573,7 @@ app.get('/api/game/leaderboard', (req, res) => {
   res.json({ ok:true, serverKey, updatedAt: snap.updatedAt || 0, stale, entries: snap.top || [] });
 });
 // GET /api/overlay/activity
-app.get("/api/overlay/activity", (req, res) => {
+app.get("/api/overlay/activity", requireUsernameKey, (req, res) => {
   try {
     const privyId     = String(req.query.privyId || "");
     const windowKey   = String(req.query.window || "1h");
@@ -596,7 +596,7 @@ app.get("/api/overlay/activity", (req, res) => {
 
 
 // POST /api/overlay/activity/batch
-app.post("/api/overlay/activity/batch", express.json(), (req, res) => {
+app.post("/api/overlay/activity/batch", requireUsernameKey, express.json(), (req, res) => {
   try {
     const body = req.body || {};
     let ids = Array.isArray(body.ids) ? body.ids : [];
@@ -717,7 +717,7 @@ setInterval(() => {
 app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
   res.json(__USERNAME_MAPPING__);
 });
-app.get("/api/user/core/download", (req, res) => {
+app.get("/api/user/core/download", requireUsernameKey, (req, res) => {
   try {
     if (!fs.existsSync(CORE_PATH)) return res.status(404).json({ ok:false, error:"core_missing" });
     const etag = fileSha256Hex(CORE_PATH);
@@ -729,7 +729,7 @@ app.get("/api/user/core/download", (req, res) => {
     res.status(500).json({ ok:false, error:"download_failed" });
   }
 });
-app.post("/api/user/client-xp", jsonBody, (req, res) => {
+app.post("/api/user/client-xp", requireUsernameKey, jsonBody, (req, res) => {
   try {
     const { key, headers, endpoint } = req.body || {};
 
@@ -805,7 +805,7 @@ app.post("/api/user/admin/client-xp/delete", jsonBody, (req, res) => {
 
 
 
-app.post("/api/user/record", jsonBody, (req, res) => {
+app.post("/api/user/record", requireUsernameKey, jsonBody, (req, res) => {
   const body = req.body || {};
   const arr = Array.isArray(body)
     ? body
@@ -830,7 +830,7 @@ app.post("/api/user/record", jsonBody, (req, res) => {
 const VERSION_PATH = path.join(__dirname, "version.json");
 
 
-app.get("/api/user/core/meta", (req, res) => {
+app.get("/api/user/core/meta", requireUsernameKey, (req, res) => {
   try {
     const sha256 = fileSha256Hex(CORE_PATH);
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
@@ -855,7 +855,7 @@ app.post("/api/user/admin/flush-now", jsonBody, async (req, res) => {
   }
 });
 // 🕐 username join queue
-app.get("/api/user/debug/state", async (req, res) => {
+app.get("/api/user/debug/state", requireUsernameKey, async (req, res) => {
   try {
     let size = 0, mtime = null;
     try {
@@ -1160,11 +1160,11 @@ app.post("/api/validate", async (req, res) => {
 // Serve current version
 
 
-app.get("/api/core/version", (req, res) => {
+app.get("/api/core/version", requireUsernameKey, (req, res) => {
   res.json({ version: ACTIVE_VERSION });
 });
 
-app.post("/api/core/bump", (req, res) => {
+app.post("/api/core/bump", requireUsernameKey, (req, res) => {
   // auth: choose one. If you want x-admin-token:
   const hdr = req.headers["x-admin-token"];
   if (hdr !== ADMIN_TOKEN) return res.status(403).json({ error: "unauthorized" });
@@ -1451,6 +1451,7 @@ app.get("/", (req,res)=>
 app.get("/dashboard.html", requireDashboardAuth, (req, res) => {
   res.sendFile(path.join(__dirname, "dashboard.html"));
 });
+
 
 app.get("/dashboard", requireDashboardAuth, (req, res) => {
   res.redirect("/dashboard.html");
