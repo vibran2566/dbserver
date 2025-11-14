@@ -15,6 +15,48 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const USER_FILE = path.join(DATA_DIR, "usernames.json");
 const XP_FILE = path.join(DATA_DIR, "client-xp.json");
 const XP_LOG_ENDPOINT = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
+const DASHBOARD_USER = process.env.DASHUSER || "";
+const DASHBOARD_PASS = process.env.DASHPASS || "";
+
+// Basic auth for dashboard
+function requireDashboardAuth(req, res, next) {
+  const header = req.headers["authorization"] || "";
+  const [scheme, encoded] = header.split(" ");
+
+  const sendAuth = () => {
+    res.setHeader("WWW-Authenticate", 'Basic realm="DamnBruh Dashboard"');
+    return res.status(401).send("Authentication required");
+  };
+
+  if (scheme !== "Basic" || !encoded) {
+    return sendAuth();
+  }
+
+  let user = "";
+  let pass = "";
+  try {
+    const decoded = Buffer.from(encoded, "base64").toString("utf8");
+    const idx = decoded.indexOf(":");
+    if (idx === -1) return sendAuth();
+    user = decoded.slice(0, idx);
+    pass = decoded.slice(idx + 1);
+  } catch {
+    return sendAuth();
+  }
+
+  if (!DASHBOARD_USER || !DASHBOARD_PASS) {
+    console.error("DASHUSER / DASHPASS not set in env");
+    return res.status(500).send("Dashboard credentials not configured");
+  }
+
+  if (user !== DASHBOARD_USER || pass !== DASHBOARD_PASS) {
+    return sendAuth();
+  }
+
+  // ok
+  return next();
+}
+
 
 
 function loadXpStore(fallback = {}) {
@@ -1370,5 +1412,14 @@ app.get("/api/user/alerts", async (req, res) => {
 app.get("/", (req,res)=>
   res.send("✅ Combined License + Username Tracker Active")
 );
+
+// Admin dashboard page (protected)
+app.get("/dashboard.html", requireDashboardAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, "dashboard.html"));
+});
+
+app.get("/dashboard", requireDashboardAuth, (req, res) => {
+  res.redirect("/dashboard.html");
+});
 
 app.listen(PORT, ()=> console.log(`✅ Combined server running on :${PORT}`));
