@@ -420,9 +420,6 @@ for (const p of filtered) {
   const name = (p.name || '').trim();
   if (id && name && !/^anonymous player$/i.test(name)) {
     const regionLabel = dbRegion(serverKey); // "US" or "EU"
-    recordUsername({ privyId: id, username: name, region: regionLabel });
-    dbDirty = true;
-    __JOIN_BUFFER__.push({ privyId: id, username: name, region: regionLabel });
   }
 }
 
@@ -613,31 +610,32 @@ app.post("/api/overlay/activity/batch", requireUsernameKey, express.json(), (req
 
 // GET /api/game/usernames?serverKey=us-1
 // Protected usernames list — requires Authorization: Bearer <username_key>
-app.get('/api/game/usernames', requireUsernameKey, (req, res) => {
+// GET /api/game/usernames?serverKey=us-1
+// Protected usernames list — requires Authorization: Bearer <username_key>
+app.get("/api/game/usernames", requireUsernameKey, (req, res) => {
   try {
-    const serverKey = String(req.query.serverKey || '');
+    const serverKey = String(req.query.serverKey || "");
     if (!DB_SHARDS.includes(serverKey)) {
-      return res.status(404).json({ ok: false, error: 'invalid_serverKey' });
+      return res.status(404).json({ ok: false, error: "invalid_serverKey" });
     }
 
-    // If you want to restrict what the dashboard sees, you can clone/filter dbUsernamesMem here.
-        const players = (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === 'object')
-      ? __USERNAME_MAPPING__.players
-      : {};
+    const players =
+      __USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === "object"
+        ? __USERNAME_MAPPING__.players
+        : {};
 
     return res.json({
       ok: true,
       serverKey,
       updatedAt: __USERNAME_MAPPING__.updatedAt || nowMs(),
-      usernames: { players }
-    });
-
+      usernames: { players },
     });
   } catch (err) {
-    console.error('/api/game/usernames:', err);
-    return res.status(500).json({ ok: false, error: 'server_error' });
+    console.error("/api/game/usernames:", err);
+    return res.status(500).json({ ok: false, error: "server_error" });
   }
 });
+
 
 
 // Paths
