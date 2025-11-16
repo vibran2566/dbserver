@@ -15,14 +15,16 @@
     },
     {
       "key": "KEY-D7CDUFG0",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T13:18:45.573Z",
       "note": "Kitmeef",
       "lastUsedAt": "2025-11-13T01:32:24.978Z",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
-      "version": "1.1.1"
+      "version": "1.1.1",
+      "usedAt": "2025-11-16T23:30:33.242Z",
+      "boundProof": "c289806241b65c06aa11c001a0ab72aad3e2c4eac90fed704e54e65c73efc5b4"
     },
     {
       "key": "KEY-7BJ09GB9",
