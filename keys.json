@@ -28,16 +28,14 @@
     },
     {
       "key": "KEY-XKRT7P8B",
-      "used": true,
+      "used": false,
       "revoked": false,
       "createdAt": "2025-10-29T13:06:45.933Z",
       "note": "Kitmeef",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
       "version": "1.1.1",
-      "lastUsedAt": "2025-11-14T00:33:33.230Z",
-      "usedAt": "2025-11-11T04:20:52.153Z",
-      "boundProof": "63ce1b6dd76d87850658df49e3c66710be8586834d0dd6120415eade43335cc4"
+      "lastUsedAt": "2025-11-14T00:33:33.230Z"
     },
     {
       "key": "KEY-EJJGM5VH",
