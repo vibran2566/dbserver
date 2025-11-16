@@ -137,25 +137,8 @@ const app  = express();
 const jsonBody = express.json({ limit: "256kb" });
 
 
-function loadUserFile(fallback = { players: {} }) {
-  try {
-    if (fs.existsSync(USER_FILE)) {
-      return JSON.parse(fs.readFileSync(USER_FILE, "utf8"));
-    }
-  } catch (e) {
-    console.error("[usernames load]", e?.message || e);
-  }
-  return fallback;
-}
-function saveUserFile(obj) {
-  try {
-    fs.writeFileSync(USER_FILE, JSON.stringify(obj, null, 2));
-    return true;
-  } catch (e) {
-    console.error("[usernames save]", e?.message || e);
-    return false;
-  }
-}
+
+
 
 
 // XP cache + flush state
@@ -390,8 +373,7 @@ function makeBinsAndMeta(p, windowKey, tzOffsetMin){
 
 
 // Load usernames file to memory (compatible with your existing schema)
-let dbUsernamesMem = loadUserFile();
-let dbDirty = false;
+
 
 async function dbPollShard(serverKey) {
   try {
@@ -444,10 +426,7 @@ for (const p of filtered) {
   }
 }
 
-await fsp.writeFile(
-  USERNAMES_FILE_PATH,
-  JSON.stringify(__USERNAME_MAPPING__, null, 2)
-);
+
 
     // ✅ keep filtered (for debugging) and top (for clients)
     dbShardCache[serverKey] = {
@@ -464,27 +443,31 @@ await fsp.writeFile(
 // Poll all shards every 5s (fire-and-forget)
 setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
 
-// Persist usernames every 15s; keep polling/caching between writes
-setInterval(() => {
-  if (!dbDirty) return;
-  if (saveUserFile(dbUsernamesMem)) dbDirty = false;
-}, 15000);
+
 
 await fsp.mkdir(DATA_DIR, { recursive: true }).catch(() => {});
 try {
   const raw = await fsp.readFile(USERNAMES_FILE_PATH, "utf8");
   const j = JSON.parse(raw);
   if (j && typeof j === "object") {
-    __USERNAME_MAPPING__.players   = j.players || {};
+    const players = (j.players && typeof j.players === "object") ? j.players : {};
+    __USERNAME_MAPPING__.players   = players;
     __USERNAME_MAPPING__.updatedAt = j.updatedAt || Date.now();
   }
-} catch {
-  // first boot: write an empty file
-  await fsp.writeFile(
-    USERNAMES_FILE_PATH,
-    JSON.stringify(__USERNAME_MAPPING__, null, 2)
-  );
+} catch (e) {
+  if (e && e.code === "ENOENT") {
+    // Truly first boot: create an empty file
+    await fsp.writeFile(
+      USERNAMES_FILE_PATH,
+      JSON.stringify(__USERNAME_MAPPING__, null, 2)
+    );
+  } else {
+    console.error("[usernames load] NOT resetting file; JSON is invalid or unreadable:", e);
+    // optional: copy to backup here if you want
+    // await fsp.copyFile(USERNAMES_FILE_PATH, USERNAMES_FILE_PATH + ".bak");
+  }
 }
+
 // Backfill region fields for old records (idempotent)
 for (const p of Object.values(__USERNAME_MAPPING__.players || {})) {
   if (!p.regionCounts) p.regionCounts = { US: 0, EU: 0 };
@@ -638,11 +621,17 @@ app.get('/api/game/usernames', requireUsernameKey, (req, res) => {
     }
 
     // If you want to restrict what the dashboard sees, you can clone/filter dbUsernamesMem here.
+        const players = (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === 'object')
+      ? __USERNAME_MAPPING__.players
+      : {};
+
     return res.json({
       ok: true,
       serverKey,
-      updatedAt: nowMs(),
-      usernames: dbUsernamesMem
+      updatedAt: __USERNAME_MAPPING__.updatedAt || nowMs(),
+      usernames: { players }
+    });
+
     });
   } catch (err) {
     console.error('/api/game/usernames:', err);
@@ -1345,21 +1334,32 @@ app.post("/api/user/admin/add-note", async (req, res) => {
     res.status(500).json({ ok:false, error:"write_failed" });
   }
 });
-app.post("/api/user/admin/delete-player", (req, res) => {
+app.post("/api/user/admin/delete-player", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
     return res.status(401).json({ ok:false, error:"unauthorized" });
 
   const { privyId } = req.body || {};
   if (!privyId) return res.status(400).json({ ok:false, error:"missing_privyId" });
 
-  const data = loadUserFile();
-  if (!data.players || !data.players[privyId])
+  const players = (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === "object")
+    ? __USERNAME_MAPPING__.players
+    : (__USERNAME_MAPPING__.players = {});
+
+  if (!players[privyId])
     return res.status(404).json({ ok:false, error:"not_found" });
 
-  delete data.players[privyId];
-  saveUserFile(data);
-  res.json({ ok:true, message:`Deleted ${privyId}` });
+  delete players[privyId];
+  __USERNAME_MAPPING__.updatedAt = Date.now();
+
+  try {
+    await flushUsernamesNow();
+    res.json({ ok:true, message:`Deleted ${privyId}` });
+  } catch (e) {
+    console.error("[admin delete-player] flush failed", e);
+    res.status(500).json({ ok:false, error:"flush_failed" });
+  }
 });
+
 
 app.post("/api/user/admin/revoke", async (req,res)=>{
   if (req.header("admin-token")!==ADMIN_TOKEN)
