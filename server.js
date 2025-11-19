@@ -408,20 +408,30 @@ async function dbPollShard(serverKey) {
     rank: i + 1
   }));
 // record session + a ping for mv>0 players
+// record session + a ping for mv>0 players
+// record session + a ping for mv>0 players
 const ts = Date.now();
-const region = serverKey.startsWith('us-') ? 'US' : 'EU';
+const region = dbRegion(serverKey); // "US" or "EU"
 for (const p of top) {
   recordActivity(p.privyId, ts, p.joinTime);
   recordPing(p.privyId, p.name, region, ts);
 }
-// feed mapping so icons can render
+
+// feed usernames mapping so icons / admin panel have data
 for (const p of filtered) {
   const id   = p.privyId;
   const name = (p.name || '').trim();
   if (id && name && !/^anonymous player$/i.test(name)) {
-    const regionLabel = dbRegion(serverKey); // "US" or "EU"
+    recordUsername({
+      privyId:  id,
+      username: name,
+      realName: null,
+      region
+    });
   }
 }
+
+
 
 
 
