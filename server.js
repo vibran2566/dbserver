@@ -1006,67 +1006,27 @@ app.post("/api/admin/alert", async (req, res) => {
   }
 });
 // Admin: cleanup usernames in-memory and persist to /data
+// Admin: hard reset usernames mapping and persist to /data
 app.post('/api/user/admin/cleanup-now', async (req, res) => {
   if (req.header('admin-token') !== ADMIN_TOKEN) {
     return res.status(401).json({ ok:false, error:'unauthorized' });
   }
+
   try {
-    const players = (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === 'object')
-      ? __USERNAME_MAPPING__.players : {};
-
-    const AN = /^\s*anonymous\s+player\s*$/i;
-    let removedPending = 0, removedRegion = 0, removedAnon = 0, filteredTop = 0, pruned = 0;
-
-    // Remove ALL pending:* (collect first to avoid mutation while iterating)
-    for (const k of Object.keys(players)) {
-      if (k.startsWith('pending:')) { delete players[k]; removedPending++; }
-    }
-
-    // Per-player cleanup
-    const prune = [];
-    for (const [k, p] of Object.entries(players)) {
-      if (!p || typeof p !== 'object') { prune.push(k); continue; }
-
-      // Drop legacy Region (keep topRegion, regionCounts)
-      if (Object.prototype.hasOwnProperty.call(p, 'Region')) { delete p.Region; removedRegion++; }
-
-      // Remove "Anonymous Player" from usernames (any case/spacing)
-      const u = (p.usernames && typeof p.usernames === 'object') ? p.usernames : {};
-      for (const name of Object.keys(u)) {
-        if (AN.test(name)) { delete u[name]; removedAnon++; }
-      }
-      p.usernames = u;
-
-      // Recompute topUsernames from usernames, ensure no Anonymous in top
-      const top = Object.entries(u)
-        .filter(([,v]) => typeof v === 'number' && v > 0)
-        .sort((a,b) => b[1]-a[1])
-        .slice(0,3)
-        .map(([name, count]) => ({ name, count }));
-      const before = Array.isArray(p.topUsernames) ? p.topUsernames.length : 0;
-      p.topUsernames = top.filter(t => !AN.test(t.name));
-      filteredTop += Math.max(0, before - p.topUsernames.length);
-
-      // Prune empties (no usernames and no realName)
-      const hasReal = !!(p.realName && String(p.realName).trim());
-      if (!hasReal && Object.keys(u).length === 0) prune.push(k);
-    }
-    for (const k of prune) { delete players[k]; pruned++; }
-
-    __USERNAME_MAPPING__.players = players;
+    // wipe all players
+    __USERNAME_MAPPING__.players = {};
     __USERNAME_MAPPING__.updatedAt = Date.now();
 
-    // Persist to /data
+    // write a fresh, empty usernames.json to /data
     await flushUsernamesNow();
 
-    res.json({ ok:true, stats:{
-      removedPending, removedRegion, removedAnon, filteredTop, pruned,
-      total: Object.keys(players).length
-    }});
+    res.json({ ok:true, stats:{ cleared:true, total:0 } });
   } catch (e) {
-    res.status(500).json({ ok:false, error: String(e) });
+    console.error('cleanup-now:', e);
+    res.status(500).json({ ok:false, error:String(e) });
   }
 });
+
 
 app.post("/api/admin/unuse-key", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
