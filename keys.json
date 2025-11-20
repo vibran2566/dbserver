@@ -64,14 +64,16 @@
     },
     {
       "key": "KEY-LTMBAJNM",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T22:24:01.706Z",
       "lastUsedAt": "2025-11-20T08:12:31.618Z",
       "note": "vibran PC",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
-      "version": "1.1.1"
+      "version": "1.1.1",
+      "usedAt": "2025-11-20T22:54:03.355Z",
+      "boundProof": "90a61b9a36677daf16b8aebb98b8b20f447b49db87cc0a09904f18af1618be52"
     },
     {
       "key": "KEY-R02BIBU0",
