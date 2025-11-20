@@ -41,14 +41,16 @@
     },
     {
       "key": "KEY-P6EBRNIM",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T20:22:09.129Z",
       "lastUsedAt": "2025-11-20T08:29:32.221Z",
       "note": "vibran PC",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
-      "version": "1.1.1"
+      "version": "1.1.1",
+      "usedAt": "2025-11-20T22:54:16.616Z",
+      "boundProof": "737ed8fc1412309f1144639f90fc29cc3f4a55a31995743d64a4fa3873ae9971"
     },
     {
       "key": "KEY-WJOHBZB6",
