@@ -42,7 +42,7 @@
     {
       "key": "KEY-EJJGM5VH",
       "used": true,
-      "revoked": false,
+      "revoked": true,
       "createdAt": "2025-10-29T13:06:45.933Z",
       "note": "ajense",
       "coreVersion": "1.1.1",
