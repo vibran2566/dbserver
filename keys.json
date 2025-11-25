@@ -111,15 +111,6 @@
       "boundProof": "0208fc336e244169c8f7d90bfcfc6c5fb75685ca923bda422e2e86fed37def59"
     },
     {
-      "key": "KEY-SJ4LOFT3",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-11-03T19:02:20.718Z",
-      "usedAt": "2025-11-03T19:06:49.878Z",
-      "boundProof": "502426a13845d26d347ed692a19001fc34955de08d41c0754509734705f0d021",
-      "lastUsedAt": "2025-11-06T18:13:12.238Z"
-    },
-    {
       "key": "KEY-AGH67842",
       "used": false,
       "revoked": false,
