@@ -125,6 +125,42 @@ function trimOld(p, now){
   p.pings    = (p.pings   || []).filter(x => x.ts >= cutoff);
 }
 
+function pickDidFromQuery(q) {
+  if (!q || typeof q !== "object") return "";
+
+  // Your preferred formats:
+  // ?did=did:privy:...
+  // ?privyId=did:privy:...
+  const candidates = [];
+  if (typeof q.did === "string") candidates.push(q.did);
+  if (typeof q.privyId === "string") candidates.push(q.privyId);
+  if (typeof q.id === "string") candidates.push(q.id);
+
+  // Your example format (odd but valid): ?=did:privy:...
+  if (typeof q[""] === "string") candidates.push(q[""]);
+
+  // Fallback: scan any key/value in the query object
+  for (const [k, v] of Object.entries(q)) {
+    if (typeof v === "string") candidates.push(v);
+    if (typeof k === "string") candidates.push(k);
+  }
+
+  const did = candidates.find(s => typeof s === "string" && s.startsWith("did:privy:")) || "";
+  return did.trim();
+}
+
+function sanitizePlayerForMapping(p) {
+  if (!p || typeof p !== "object") return null;
+  return {
+    realName: p.realName ?? null,
+    usernames: (p.usernames && typeof p.usernames === "object") ? p.usernames : {},
+    topUsernames: Array.isArray(p.topUsernames) ? p.topUsernames : [],
+    regionCounts: (p.regionCounts && typeof p.regionCounts === "object")
+      ? p.regionCounts
+      : { US: 0, EU: 0 },
+    topRegion: p.topRegion ?? null,
+  };
+}
 
 function alignWindowStart(now, binMs, count, tzOffsetMin){
   const off = (tzOffsetMin|0) * 60 * 1000;
@@ -728,20 +764,35 @@ setInterval(() => {
 
 // Disk-only mapping (single source of truth)
 app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
-  res.json(__USERNAME_MAPPING__);
-});
-app.get("/api/user/core/download", requireUsernameKey, (req, res) => {
   try {
-    if (!fs.existsSync(CORE_PATH)) return res.status(404).json({ ok:false, error:"core_missing" });
-    const etag = fileSha256Hex(CORE_PATH);
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
-    res.setHeader("ETag", etag);
-    res.sendFile(CORE_PATH);
-  } catch (err) {
-    console.error("download:", err);
-    res.status(500).json({ ok:false, error:"download_failed" });
+    res.setHeader("Cache-Control", "no-store");
+
+    const players =
+      (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === "object")
+        ? __USERNAME_MAPPING__.players
+        : {};
+
+    const did = pickDidFromQuery(req.query);
+
+    // If a DID is provided, return only that section
+    if (did) {
+      const one = sanitizePlayerForMapping(players[did]);
+      return res.json(one ? { [did]: one } : {});
+    }
+
+    // Otherwise return the whole mapping file (sanitized)
+    const out = {};
+    for (const [id, p] of Object.entries(players)) {
+      const clean = sanitizePlayerForMapping(p);
+      if (clean) out[id] = clean;
+    }
+    return res.json(out);
+  } catch (e) {
+    console.error("/api/user/mapping:", e);
+    return res.status(500).json({ ok: false, error: "server_error" });
   }
 });
+
 app.post("/api/user/client-xp", requireUsernameKey, jsonBody, (req, res) => {
   try {
     const { key, headers, endpoint } = req.body || {};
