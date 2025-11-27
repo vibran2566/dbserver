@@ -54,13 +54,15 @@
     },
     {
       "key": "KEY-WJOHBZB6",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-10-29T22:12:07.942Z",
       "note": "Ant",
       "coreVersion": "1.1.1",
       "requiredCore": "1.1.1",
-      "version": "1.1.1"
+      "version": "1.1.1",
+      "usedAt": "2025-11-27T04:19:30.412Z",
+      "boundProof": "2511dbe4b7b86c776ceea199e6563a58440b1c1c50f0b34840ae66b20b254ea6"
     },
     {
       "key": "KEY-SCASNFRI",
