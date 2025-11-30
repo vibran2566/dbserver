@@ -17,6 +17,123 @@ const XP_FILE = path.join(DATA_DIR, "client-xp.json");
 const XP_LOG_ENDPOINT = "https://dbserver-8bhx.onrender.com/api/user/client-xp";
 const DASHBOARD_USER = process.env.DASHUSER || "";
 const DASHBOARD_PASS = process.env.DASHPASS || "";
+// ========= A) Disk-per-player store (V2) + small LRU cache =========
+const PLAYER_DIR = path.join(DATA_DIR, "players"); // /data/players
+fs.mkdirSync(PLAYER_DIR, { recursive: true });
+
+const PLAYER_CACHE_MAX = Number(process.env.PLAYER_CACHE_MAX || 1200);
+const __PLAYER_CACHE__ = new Map(); // did -> player (Map order = LRU)
+const __PLAYER_DIRTY__ = new Set(); // dids that need flush
+let __PLAYER_FLUSHING__ = false;
+
+function didToFile(did) {
+  // safe filename
+  return path.join(PLAYER_DIR, encodeURIComponent(String(did)) + ".json");
+}
+
+function newPlayer() {
+  const now = Date.now();
+  return {
+    realName: null,
+    usernames: {},
+    topUsernames: [],
+    regionCounts: { US: 0, EU: 0 },
+    topRegion: null,
+    firstSeen: now,
+    lastSeen: 0,
+
+    // activity
+    lastSeenActivity: 0,
+    sessions: [],
+    pings: []
+  };
+}
+
+function touchPlayerCache(did, player) {
+  if (__PLAYER_CACHE__.has(did)) __PLAYER_CACHE__.delete(did);
+  __PLAYER_CACHE__.set(did, player);
+
+  while (__PLAYER_CACHE__.size > PLAYER_CACHE_MAX) {
+    const oldestDid = __PLAYER_CACHE__.keys().next().value;
+    // do not flush here, eviction can happen during hot loops
+    __PLAYER_CACHE__.delete(oldestDid);
+    __PLAYER_DIRTY__.delete(oldestDid);
+  }
+}
+
+function loadPlayerIfExists(did) {
+  try {
+    const fp = didToFile(did);
+    if (!fs.existsSync(fp)) return null;
+    const raw = fs.readFileSync(fp, "utf8");
+    if (!raw.trim()) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return null;
+    // minimal shape hardening
+    if (!obj.usernames || typeof obj.usernames !== "object") obj.usernames = {};
+    if (!Array.isArray(obj.topUsernames)) obj.topUsernames = [];
+    if (!obj.regionCounts || typeof obj.regionCounts !== "object") obj.regionCounts = { US: 0, EU: 0 };
+    if (!Array.isArray(obj.sessions)) obj.sessions = [];
+    if (!Array.isArray(obj.pings)) obj.pings = [];
+    return obj;
+  } catch (e) {
+    console.error("[player load]", did, e?.message || e);
+    return null;
+  }
+}
+
+function getPlayerCached(did, create = false) {
+  did = String(did || "").trim();
+  if (!did) return null;
+
+  if (__PLAYER_CACHE__.has(did)) {
+    const p = __PLAYER_CACHE__.get(did);
+    touchPlayerCache(did, p);
+    return p;
+  }
+
+  const fromDisk = loadPlayerIfExists(did);
+  if (fromDisk) {
+    touchPlayerCache(did, fromDisk);
+    return fromDisk;
+  }
+
+  if (!create) return null;
+  const p = newPlayer();
+  touchPlayerCache(did, p);
+  __PLAYER_DIRTY__.add(did);
+  return p;
+}
+
+function markDirty(did) {
+  if (did) __PLAYER_DIRTY__.add(String(did));
+}
+
+function writeJsonAtomicSync(filePath, obj) {
+  const tmp = filePath + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2));
+  fs.renameSync(tmp, filePath);
+}
+
+function flushDirtyPlayersNow() {
+  if (__PLAYER_FLUSHING__) return;
+  __PLAYER_FLUSHING__ = true;
+  try {
+    for (const did of Array.from(__PLAYER_DIRTY__)) {
+      const p = __PLAYER_CACHE__.get(did) || loadPlayerIfExists(did);
+      if (!p) { __PLAYER_DIRTY__.delete(did); continue; }
+      writeJsonAtomicSync(didToFile(did), p);
+      __PLAYER_DIRTY__.delete(did);
+    }
+  } catch (e) {
+    console.error("[player flush]", e?.message || e);
+  } finally {
+    __PLAYER_FLUSHING__ = false;
+  }
+}
+
+// flush dirty players every 15s
+setInterval(flushDirtyPlayersNow, 15000);
 
 // Basic auth for dashboard
 function requireDashboardAuth(req, res, next) {
@@ -276,55 +393,51 @@ function nowMs() { return Date.now(); }
 
 // --- Activity timeline helpers ---
 function ensureActivityPlayer(privyId) {
-  if (!__USERNAME_MAPPING__.players[privyId]) {
-    __USERNAME_MAPPING__.players[privyId] = {
-      realName: undefined,
-      usernames: {},
-      topUsernames: [],
-      regionCounts: { US:0, EU:0 },
-      topRegion: null,
-      firstSeen: Date.now(),
-      lastSeen: 0,
-      sessions: [],  // NEW
-      pings: []      // NEW
-    };
-  }
-  const p = __USERNAME_MAPPING__.players[privyId];
-  if (!Array.isArray(p.sessions)) p.sessions = [];
-  if (!Array.isArray(p.pings))    p.pings    = [];
-  return p;
+  return getPlayerCached(privyId, true);
 }
-function trimOldSessions(p) {
+
+function trimOldSessionsOnly(p) {
   const cutoff = nowMs() - RETAIN_MS;
-  p.sessions = (p.sessions||[]).filter(s => (s.end ?? s.start) >= cutoff);
+  p.sessions = (p.sessions || []).filter(s => (s.end ?? s.start) >= cutoff);
 }
+
 function recordActivity(privyId, now, joinTime) {
   const p = ensureActivityPlayer(privyId);
+  if (!p) return;
+
   const last = p.sessions[p.sessions.length - 1];
   const firstTimeSeen = !last && !p.lastSeenActivity;
   const startMs = (firstTimeSeen && Number.isFinite(joinTime)) ? Number(joinTime) : now;
+
   if (!last) {
     p.sessions.push({ start: startMs, end: now });
-  } else if ((now - p.lastSeenActivity) > INACTIVITY_MS) {
+  } else if ((now - (p.lastSeenActivity || 0)) > INACTIVITY_MS) {
     p.sessions.push({ start: Math.min(startMs, now), end: now });
   } else {
     last.end = now;
   }
+
   compactTailSessions(p);
-  trimOldSessions(p);
+  trimOldSessionsOnly(p);
+
   p.lastSeenActivity = now;
+  markDirty(privyId);
 }
 
-function recordPing(privyId, username, region, ts){
+function recordPing(privyId, username, region, ts) {
   const p = ensureActivityPlayer(privyId);
+  if (!p) return;
+
   const t = Number(ts) || Date.now();
   trimOld(p, t);
-  if (!Array.isArray(p.pings)) p.pings = [];
+
   p.pings.push({
     ts: t,
-    username: typeof username === 'string' ? username.slice(0,48) : '',
-    region: typeof region === 'string' ? region : undefined
+    username: typeof username === "string" ? username.slice(0, 48) : "",
+    region: (region === "US" || region === "EU") ? region : undefined
   });
+
+  markDirty(privyId);
 }
 
 
@@ -463,10 +576,10 @@ setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
 
     // ✅ keep filtered (for debugging) and top (for clients)
     dbShardCache[serverKey] = {
-      updatedAt: Date.now(),
-      players: filtered,
-      top
-    };
+  updatedAt: Date.now(),
+  count: filtered.length, // debug only
+  top
+};
   } catch (e) {
     console.error('[poll]', serverKey, e?.message || e);
   }
@@ -513,46 +626,33 @@ for (const p of Object.values(__USERNAME_MAPPING__.players || {})) {
 function recordUsername({ privyId, username, realName, region }) {
   if (!privyId || !username) return;
 
-  const id  = String(privyId);
-  const nm  = String(username).slice(0, 48);
+  const id = String(privyId);
+  const nm = String(username).slice(0, 48);
   const rnm = realName ? String(realName).slice(0, 64) : null;
 
-  if (!__USERNAME_MAPPING__.players[id]) {
-    __USERNAME_MAPPING__.players[id] = {
-      realName: rnm || undefined,
-      usernames: {},
-      topUsernames: [],
-      regionCounts: { US: 0, EU: 0 }, // NEW
-      topRegion: null,                // NEW
-      firstSeen: Date.now(),
-      lastSeen: 0,
-    };
-  }
-  const p = __USERNAME_MAPPING__.players[id];
+  const p = getPlayerCached(id, true);
+  if (!p) return;
 
   if (rnm) p.realName = rnm;
 
-  // username counts
   p.usernames[nm] = (p.usernames[nm] || 0) + 1;
 
-  // region counts (only US/EU accepted)
   if (!p.regionCounts) p.regionCounts = { US: 0, EU: 0 };
-  if (region === 'US' || region === 'EU') {
+  if (region === "US" || region === "EU") {
     p.regionCounts[region] = (p.regionCounts[region] || 0) + 1;
   }
 
-  // compute topRegion on every write (ties → US by default)
   const us = Number(p.regionCounts.US || 0);
   const eu = Number(p.regionCounts.EU || 0);
-  p.topRegion = (us >= eu) ? 'US' : 'EU';
+  p.topRegion = (us >= eu) ? "US" : "EU";
 
-  // top 3 usernames cache
   p.topUsernames = Object.entries(p.usernames)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
     .map(([name, count]) => ({ name, count }));
 
   p.lastSeen = Date.now();
+  markDirty(id);
 }
 
 
@@ -584,11 +684,12 @@ setInterval(flushUsernamesNow, 15000); // not 15_000
 app.get('/api/game/leaderboard', requireUsernameKey, (req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
-
-  const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
+  const snap = dbShardCache[serverKey] || { updatedAt:0, top:[], count:0 };
   const stale = nowMs() - (snap.updatedAt || 0) > 8000;
-  res.json({ ok:true, serverKey, updatedAt: snap.updatedAt || 0, stale, entries: snap.top || [] });
+  res.json({ ok:true, serverKey, updatedAt: snap.updatedAt || 0, stale, count: snap.count || 0, entries: snap.top || [] });
 });
+
+
 // GET /api/overlay/activity
 app.get("/api/overlay/activity", requireUsernameKey, (req, res) => {
   try {
@@ -645,27 +746,34 @@ app.post("/api/overlay/activity/batch", requireUsernameKey, express.json(), (req
 
 
 
-// GET /api/game/usernames?serverKey=us-1
-// Protected usernames list — requires Authorization: Bearer <username_key>
-// GET /api/game/usernames?serverKey=us-1
-// Protected usernames list — requires Authorization: Bearer <username_key>
 app.get("/api/game/usernames", requireUsernameKey, (req, res) => {
   try {
-    const serverKey = String(req.query.serverKey || "");
-    if (!DB_SHARDS.includes(serverKey)) {
-      return res.status(404).json({ ok: false, error: "invalid_serverKey" });
+    const all = String(req.query.all || "") === "1";
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+    const offset = Math.max(0, Number(req.query.offset || 0));
+
+    if (!all) {
+      return res.json({ ok:true, note:"use ?all=1&limit=&offset=", total: null, offset, limit, usernames: { players: {} } });
     }
 
-    const players =
-      __USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === "object"
-        ? __USERNAME_MAPPING__.players
-        : {};
+    const files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith(".json"));
+    const slice = files.slice(offset, offset + limit);
+
+    const players = {};
+    for (const f of slice) {
+      const did = decodeURIComponent(f.slice(0, -5));
+      const p = getPlayerCached(did, false) || loadPlayerIfExists(did);
+      const clean = sanitizePlayerForMapping(p);
+      if (clean) players[did] = clean;
+    }
 
     return res.json({
       ok: true,
-      serverKey,
-      updatedAt: __USERNAME_MAPPING__.updatedAt || nowMs(),
-      usernames: { players },
+      total: files.length,
+      offset,
+      limit,
+      updatedAt: Date.now(),
+      usernames: { players }
     });
   } catch (err) {
     console.error("/api/game/usernames:", err);
@@ -755,26 +863,42 @@ setInterval(() => {
 
 // Disk-only mapping (single source of truth)
 app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  try {
+    res.setHeader("Cache-Control", "no-store");
 
-  const players =
-    (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === "object")
-      ? __USERNAME_MAPPING__.players
-      : {};
+    const did = pickDidFromQuery(req.query);
 
-  const did = pickDidFromQuery(req.query);
+    if (did) {
+      const p = getPlayerCached(did, false) || loadPlayerIfExists(did);
+      const one = sanitizePlayerForMapping(p);
+      return res.json(one ? { [did]: one } : {});
+    }
 
-  if (did) {
-    const one = sanitizePlayerForMapping(players[did]);
-    return res.json(one ? { [did]: one } : {});
+    // IMPORTANT: prevent accidental “dump the world” on low-memory plan
+    const all = String(req.query.all || "") === "1";
+    if (!all) {
+      return res.status(400).json({ ok:false, error:"missing_did", hint:"use ?did=did:privy:... OR ?all=1&limit=..." });
+    }
+
+    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+    const offset = Math.max(0, Number(req.query.offset || 0));
+
+    const files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith(".json"));
+    const slice = files.slice(offset, offset + limit);
+
+    const out = {};
+    for (const f of slice) {
+      const did2 = decodeURIComponent(f.slice(0, -5));
+      const p = getPlayerCached(did2, false) || loadPlayerIfExists(did2);
+      const clean = sanitizePlayerForMapping(p);
+      if (clean) out[did2] = clean;
+    }
+
+    return res.json({ ok:true, total: files.length, offset, limit, data: out });
+  } catch (e) {
+    console.error("/api/user/mapping:", e);
+    return res.status(500).json({ ok: false, error: "server_error" });
   }
-
-  const out = {};
-  for (const [id, p] of Object.entries(players)) {
-    const clean = sanitizePlayerForMapping(p);
-    if (clean) out[id] = clean;
-  }
-  return res.json(out);
 });
 
 
@@ -909,18 +1033,16 @@ app.get("/api/user/core/download", requireUsernameKey, (req, res) => {
 });
 
 
-app.post("/api/user/admin/flush-now", jsonBody, async (req, res) => {
+// ========= C) Admin flush now (players_v2) =========
+app.post("/api/user/admin/flush-now", jsonBody, (req, res) => {
   const token = req.header("x-admin-token");
   if (token !== (process.env.ADMIN_TOKEN || "vibran2566")) {
     return res.status(401).json({ ok: false, error: "unauthorized" });
   }
-  try {
-    const ok = await flushUsernamesNow();
-    res.json({ ok: true, flushed: !!ok, updatedAt: __USERNAME_MAPPING__.updatedAt });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
-  }
+  flushDirtyPlayersNow();
+  return res.json({ ok: true, flushed: true, dirtyLeft: __PLAYER_DIRTY__.size, cache: __PLAYER_CACHE__.size });
 });
+
 // 🕐 username join queue
 app.get("/api/user/debug/state", requireUsernameKey, async (req, res) => {
   try {
