@@ -821,6 +821,40 @@ async function fetchCoreCode(key, version) {
   return (j && j.players) ? j : { players: {} };
 }
 
+async function fetchMappingBatch(ids) {
+  var key = dbGetClientKey();
+  if (!key) return { players: {} };
+
+  // sanitize + cap
+  ids = (Array.isArray(ids) ? ids : [])
+    .filter(function (x) { return typeof x === 'string' && x.indexOf('did:privy:') === 0; });
+
+  // de-dupe + max 50
+  var seen = Object.create(null);
+  var out = [];
+  for (var i = 0; i < ids.length && out.length < 50; i++) {
+    var id = ids[i];
+    if (!seen[id]) { seen[id] = 1; out.push(id); }
+  }
+  if (!out.length) return { players: {} };
+
+  var sk = resolveServerKey();
+  var url = USER_API_BASE + '/mapping/batch?serverKey=' + encodeURIComponent(sk.serverKey);
+
+  var res = await fetch(url, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + key
+    },
+    body: JSON.stringify({ ids: out })
+  });
+
+  if (!res.ok) return { players: {} };
+  var j = await res.json().catch(function(){ return {}; });
+  return (j && j.players) ? j : { players: {} };
+}
 
   function tick() {
     ensureBox();
@@ -836,10 +870,20 @@ async function fetchCoreCode(key, version) {
     tick();
     TICK = setInterval(tick, 5000);
     startActivityRefreshLoop(function(){ return __LAST_TOP__; });
-    MAP_INT = setInterval(async function () {
-      try { __MAP__ = await fetchMapping(); } catch (e) {}
-    }, 7000);
-  }
+   MAP_INT = setInterval(async function () {
+  try {
+    var top = __LAST_TOP__ || [];
+    var ids = top.map(function(p){ return p && p.privyId; }).filter(Boolean);
+    if (!ids.length) return;
+
+    var j = await fetchMappingBatch(ids);
+    if (j && j.players) {
+      if (!__MAP__ || !__MAP__.players) __MAP__ = { players: {} };
+      Object.assign(__MAP__.players, j.players); // merge, don't replace
+    }
+  } catch (e) {}
+}, 15000);
+
 
   function stop() {
     if (TICK) { clearInterval(TICK); TICK = null; }
@@ -850,25 +894,37 @@ async function fetchCoreCode(key, version) {
 
   window.__USERNAME_TRACKER__ = { stop: stop, endpoint: playersEndpoint, version: UI_VER };
 // --- command runner (privy tools) ---
-(function(){
-  function getMapThen(id, cb){
-    // Try cached mapping first
+(function () {
+  function getMapThen(id, cb) {
+    if (typeof cb !== "function") return;
+    if (!id || typeof id !== "string") { cb(null, null); return; }
+
+    // 1) Try cached mapping first
     try {
       if (__MAP__ && __MAP__.players && __MAP__.players[id]) {
         cb(__MAP__.players[id], __MAP__);
         return;
       }
-    } catch{}
-    // Fallback: fetch fresh mapping
-    fetch(`${USER_API_BASE}/mapping?did=${encodeURIComponent(id)}&serverKey=${encodeURIComponent(resolveServerKey().serverKey)}`, {
-  cache: 'no-store',
-  headers: { 'Authorization': 'Bearer ' + dbGetClientKey() }
-})
-.then(r => r.json()).catch(() => ({}))
-.then(j => { __MAP__ = j || { players:{} }; cb(__MAP__.players[id], __MAP__); })
-.catch(() => cb(null, null));
+    } catch (e) {}
 
+    // 2) Fallback: fetch just this player via batch, then merge
+    fetchMappingBatch([id])
+      .then(function (j) {
+        if (!__MAP__ || !__MAP__.players) __MAP__ = { players: {} };
+        if (j && j.players) Object.assign(__MAP__.players, j.players);
+        cb(__MAP__.players[id] || null, __MAP__);
+      })
+      .catch(function () {
+        cb(null, null);
+      });
   }
+
+  // keep/export getMapThen however your file currently uses it...
+})();
+
+
+
+
 
   function loadInfoByPrivy(id){
     if (!id || typeof id !== 'string') { dbShowAlertToast('load-info: missing/invalid privyId'); return; }
