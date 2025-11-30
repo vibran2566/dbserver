@@ -580,14 +580,14 @@ setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
 
 
 
-    // ✅ keep filtered (for debugging) and top (for clients)
+       // keep only what clients need
     dbShardCache[serverKey] = {
-  updatedAt: Date.now(),
-  count: filtered.length, // debug only
-  top
-};
+      updatedAt: Date.now(),
+      count: filtered.length,
+      top: top
+    };
   } catch (e) {
-    console.error('[poll]', serverKey, e?.message || e);
+    console.error('[poll]', serverKey, (e && e.message) ? e.message : e);
   }
 }
 
