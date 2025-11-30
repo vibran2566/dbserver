@@ -808,15 +808,15 @@ async function fetchCoreCode(key, version) {
   var key = dbGetClientKey();
   if (!key) return { players: {} };
 
-  var res = await fetch(USER_API_BASE + '/mapping', {
+  var sk = resolveServerKey();
+  var url = USER_API_BASE + '/mapping?serverKey=' + encodeURIComponent(sk.serverKey);
+
+  var res = await fetch(url, {
     cache: 'no-store',
-    headers: {
-      'Authorization': 'Bearer ' + key
-    }
+    headers: { 'Authorization': 'Bearer ' + key }
   });
 
   if (!res.ok) return { players: {} };
-
   var j = await res.json().catch(function(){ return {}; });
   return (j && j.players) ? j : { players: {} };
 }
@@ -860,10 +860,14 @@ async function fetchCoreCode(key, version) {
       }
     } catch{}
     // Fallback: fetch fresh mapping
-    fetch(`${USER_API_BASE}/mapping`, { cache:'no-store' })
-      .then(r => r.json()).catch(() => ({}))
-      .then(j => { __MAP__ = j || { players:{} }; cb(__MAP__.players[id], __MAP__); })
-      .catch(() => cb(null, null));
+    fetch(`${USER_API_BASE}/mapping?did=${encodeURIComponent(id)}&serverKey=${encodeURIComponent(resolveServerKey().serverKey)}`, {
+  cache: 'no-store',
+  headers: { 'Authorization': 'Bearer ' + dbGetClientKey() }
+})
+.then(r => r.json()).catch(() => ({}))
+.then(j => { __MAP__ = j || { players:{} }; cb(__MAP__.players[id], __MAP__); })
+.catch(() => cb(null, null));
+
   }
 
   function loadInfoByPrivy(id){
