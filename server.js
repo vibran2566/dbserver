@@ -562,11 +562,17 @@ async function dbPollShard(serverKey) {
       }
     }
 
-    dbShardCache[serverKey] = { updatedAt: Date.now(), top };
+        // keep only what clients need
+    dbShardCache[serverKey] = {
+      updatedAt: Date.now(),
+      count: filtered.length,
+      top: top
+    };
   } catch (e) {
-    console.error('[poll]', serverKey, e?.message || e);
+    console.error('[poll]', serverKey, (e && e.message) ? e.message : e);
   }
 }
+
 
 setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
 
