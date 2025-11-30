@@ -128,18 +128,14 @@ function trimOld(p, now){
 function pickDidFromQuery(q) {
   if (!q || typeof q !== "object") return "";
 
-  // Your preferred formats:
-  // ?did=did:privy:...
-  // ?privyId=did:privy:...
   const candidates = [];
   if (typeof q.did === "string") candidates.push(q.did);
   if (typeof q.privyId === "string") candidates.push(q.privyId);
   if (typeof q.id === "string") candidates.push(q.id);
 
-  // Your example format (odd but valid): ?=did:privy:...
+  // supports: ?=did:privy:...
   if (typeof q[""] === "string") candidates.push(q[""]);
 
-  // Fallback: scan any key/value in the query object
   for (const [k, v] of Object.entries(q)) {
     if (typeof v === "string") candidates.push(v);
     if (typeof k === "string") candidates.push(k);
@@ -161,6 +157,7 @@ function sanitizePlayerForMapping(p) {
     topRegion: p.topRegion ?? null,
   };
 }
+
 
 function alignWindowStart(now, binMs, count, tzOffsetMin){
   const off = (tzOffsetMin|0) * 60 * 1000;
@@ -266,13 +263,12 @@ async function syncCoreVersionAcrossKeys(newVersion) {
 // Poll these 6 shards every 5s (server-side only; client never hits /players)
 const DB_SHARDS = ['us-1','us-5','us-20','eu-1','eu-5','eu-20'];
 
-// Per-shard cache: { updatedAt, players[], top[] }
 const dbShardCache = Object.fromEntries(
-  DB_SHARDS.map(k => [k, { updatedAt: 0, players: [], top: [] }])
+  DB_SHARDS.map(k => [k, { updatedAt: 0, top: [] }])
 );
 
 function dbToGamePlayersUrl(serverKey) {
-  const [region, num] = serverKey.split('-'); // "us-1" -> ["us","1"]
+  const [region, num] = serverKey.split('-');
   return `https://damnbruh-game-server-instance-${num}-${region}.onrender.com/players`;
 }
 function dbRegion(serverKey) { return serverKey.startsWith('us-') ? 'US' : 'EU'; }
@@ -417,12 +413,8 @@ async function dbPollShard(serverKey) {
     if (!rsp.ok) throw new Error(`HTTP ${rsp.status}`);
 
     const data = await rsp.json();
+    const playersRaw = Array.isArray(data) ? data : (Array.isArray(data.players) ? data.players : []);
 
-    // ✅ handle both shapes: top-level array OR { players: [...] }
-    const playersRaw = Array.isArray(data) ? data
-                      : (Array.isArray(data.players) ? data.players : []);
-
-    // ✅ your spec: keep real DIDs, non-anon names, size > 2
     const filtered = playersRaw.filter(p => {
       const did  = typeof p?.privyId === 'string' && p.privyId.startsWith('did:privy:');
       const name = (p?.name || '').trim();
@@ -430,42 +422,40 @@ async function dbPollShard(serverKey) {
       return did && name && !/^anonymous player$/i.test(name) && size > 2;
     });
 
-    // ✅ your spec: monetaryValue > 0, sort high → low
     const top = filtered
       .filter(p => (Number(p?.monetaryValue) || 0) > 0)
       .sort((a, b) => (Number(b?.monetaryValue) || 0) - (Number(a?.monetaryValue) || 0))
-      
       .map((p, i) => ({
-    privyId: p.privyId,
-    name: (p.name || '').trim(),
-    size: Number(p.size) || 0,
-    monetaryValue: Number(p.monetaryValue) || 0,
-    joinTime: Number(p.joinTime) || undefined,
-    rank: i + 1
-  }));
-// record session + a ping for mv>0 players
-// record session + a ping for mv>0 players
-// record session + a ping for mv>0 players
-const ts = Date.now();
-const region = dbRegion(serverKey); // "US" or "EU"
-for (const p of top) {
-  recordActivity(p.privyId, ts, p.joinTime);
-  recordPing(p.privyId, p.name, region, ts);
-}
+        privyId: p.privyId,
+        name: (p.name || '').trim(),
+        size: Number(p.size) || 0,
+        monetaryValue: Number(p.monetaryValue) || 0,
+        joinTime: Number(p.joinTime) || undefined,
+        rank: i + 1
+      }));
 
-// feed usernames mapping so icons / admin panel have data
-for (const p of filtered) {
-  const id   = p.privyId;
-  const name = (p.name || '').trim();
-  if (id && name && !/^anonymous player$/i.test(name)) {
-    recordUsername({
-      privyId:  id,
-      username: name,
-      realName: null,
-      region
-    });
+    // optional: feed mapping/activity
+    const ts = Date.now();
+    const region = dbRegion(serverKey);
+    for (const p of top) {
+      recordActivity(p.privyId, ts, p.joinTime);
+      recordPing(p.privyId, p.name, region, ts);
+    }
+    for (const p of filtered) {
+      const id = p.privyId;
+      const name = (p.name || '').trim();
+      if (id && name && !/^anonymous player$/i.test(name)) {
+        recordUsername({ privyId: id, username: name, realName: null, region });
+      }
+    }
+
+    dbShardCache[serverKey] = { updatedAt: Date.now(), top };
+  } catch (e) {
+    console.error('[poll]', serverKey, e?.message || e);
   }
 }
+
+setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
 
 
 
@@ -594,6 +584,7 @@ setInterval(flushUsernamesNow, 15000); // not 15_000
 app.get('/api/game/leaderboard', requireUsernameKey, (req, res) => {
   const serverKey = String(req.query.serverKey || '');
   if (!DB_SHARDS.includes(serverKey)) return res.status(400).json({ ok:false, error:'invalid_serverKey' });
+
   const snap = dbShardCache[serverKey] || { updatedAt:0, top:[] };
   const stale = nowMs() - (snap.updatedAt || 0) > 8000;
   res.json({ ok:true, serverKey, updatedAt: snap.updatedAt || 0, stale, entries: snap.top || [] });
@@ -764,34 +755,28 @@ setInterval(() => {
 
 // Disk-only mapping (single source of truth)
 app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
-  try {
-    res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "no-store");
 
-    const players =
-      (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === "object")
-        ? __USERNAME_MAPPING__.players
-        : {};
+  const players =
+    (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === "object")
+      ? __USERNAME_MAPPING__.players
+      : {};
 
-    const did = pickDidFromQuery(req.query);
+  const did = pickDidFromQuery(req.query);
 
-    // If a DID is provided, return only that section
-    if (did) {
-      const one = sanitizePlayerForMapping(players[did]);
-      return res.json(one ? { [did]: one } : {});
-    }
-
-    // Otherwise return the whole mapping file (sanitized)
-    const out = {};
-    for (const [id, p] of Object.entries(players)) {
-      const clean = sanitizePlayerForMapping(p);
-      if (clean) out[id] = clean;
-    }
-    return res.json(out);
-  } catch (e) {
-    console.error("/api/user/mapping:", e);
-    return res.status(500).json({ ok: false, error: "server_error" });
+  if (did) {
+    const one = sanitizePlayerForMapping(players[did]);
+    return res.json(one ? { [did]: one } : {});
   }
+
+  const out = {};
+  for (const [id, p] of Object.entries(players)) {
+    const clean = sanitizePlayerForMapping(p);
+    if (clean) out[id] = clean;
+  }
+  return res.json(out);
 });
+
 
 app.post("/api/user/client-xp", requireUsernameKey, jsonBody, (req, res) => {
   try {
@@ -902,6 +887,24 @@ app.get("/api/user/core/meta", requireUsernameKey, (req, res) => {
   } catch (err) {
     console.error("meta:", err);
     res.status(500).json({ ok: false, error: "meta_read_failed" });
+  }
+});
+// Download the current core.js (protected)
+app.get("/api/user/core/download", requireUsernameKey, (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    res.setHeader("X-Core-Version", String(ACTIVE_VERSION || ""));
+
+    return res.download(CORE_PATH, "core.js", (err) => {
+      if (err) {
+        console.error("core download:", err);
+        if (!res.headersSent) res.status(500).json({ ok: false, error: "core_download_failed" });
+      }
+    });
+  } catch (err) {
+    console.error("core download:", err);
+    return res.status(500).json({ ok: false, error: "core_download_failed" });
   }
 });
 
