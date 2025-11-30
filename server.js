@@ -583,22 +583,6 @@ setInterval(function () { DB_SHARDS.forEach(function (k) { dbPollShard(k); }); }
 
 
 
-       // keep only what clients need
-    dbShardCache[serverKey] = {
-      updatedAt: Date.now(),
-      count: filtered.length,
-      top: top
-    };
-  } catch (e) {
-    console.error('[poll]', serverKey, (e && e.message) ? e.message : e);
-  }
-}
-
-
-// Poll all shards every 5s (fire-and-forget)
-setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
-
-
 
 await fsp.mkdir(DATA_DIR, { recursive: true }).catch(() => {});
 try {
