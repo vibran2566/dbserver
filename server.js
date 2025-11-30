@@ -650,6 +650,7 @@ function recordUsername({ privyId, username, realName, region }) {
 
 
 // Flush buffer to disk atomically
+// Drain join buffer only. Do NOT stringify/write a giant mapping file.
 async function flushUsernamesNow() {
   if (__IS_FLUSHING__) return false;
   __IS_FLUSHING__ = true;
@@ -658,18 +659,15 @@ async function flushUsernamesNow() {
       for (const evt of __JOIN_BUFFER__) recordUsername(evt);
       __JOIN_BUFFER__ = [];
     }
-    __USERNAME_MAPPING__.updatedAt = Date.now();
-
-    const tmp = USERNAMES_FILE_PATH + ".tmp";
-    const json = JSON.stringify(__USERNAME_MAPPING__, null, 2);
-    await fsp.writeFile(tmp, json);
-    await fsp.rename(tmp, USERNAMES_FILE_PATH);   // atomic swap
     return true;
-  } finally { __IS_FLUSHING__ = false; }
+  } finally {
+    __IS_FLUSHING__ = false;
+  }
 }
 
-// Schedule 15s periodic flush
-setInterval(flushUsernamesNow, 15000); // not 15_000
+// drain frequently; per-player disk flush already happens elsewhere
+setInterval(flushUsernamesNow, 5000);
+
 
 
 // === Read-only endpoints (client consumes these) ============================
@@ -690,7 +688,7 @@ app.get("/api/overlay/activity", requireUsernameKey, (req, res) => {
     const windowKey   = String(req.query.window || "1h");
     const tzOffsetMin = Number(req.query.tzOffsetMin || 0);
     const spec        = WINDOW_SPECS[windowKey] || WINDOW_SPECS["1h"];
-    const p           = __USERNAME_MAPPING__.players[privyId];
+    const p = getPlayerCached(privyId, false) || loadPlayerIfExists(privyId);
     const startMs     = alignWindowStart(Date.now(), spec.binMs, spec.count, tzOffsetMin);
 
     if (!p) {
@@ -705,6 +703,30 @@ app.get("/api/overlay/activity", requireUsernameKey, (req, res) => {
   }
 });
 
+// POST /api/user/mapping/batch
+// body: { ids: ["did:privy:...", ...] } (max 50)
+// resp: { players: { "<did>": { realName, usernames, topUsernames, regionCounts, topRegion } }, updatedAt }
+app.post("/api/user/mapping/batch", requireUsernameKey, jsonBody, (req, res) => {
+  try {
+    const body = req.body || {};
+    let ids = Array.isArray(body.ids) ? body.ids : [];
+    ids = ids
+      .filter(x => typeof x === "string" && x.startsWith("did:privy:"))
+      .slice(0, 50);
+
+    const players = {};
+    for (const did of ids) {
+      const p = getPlayerCached(did, false) || loadPlayerIfExists(did);
+      const clean = sanitizePlayerForMapping(p);
+      if (clean) players[did] = clean;
+    }
+
+    return res.json({ players, updatedAt: Date.now() });
+  } catch (e) {
+    console.error("/api/user/mapping/batch:", e);
+    return res.status(500).json({ ok: false, error: "server_error" });
+  }
+});
 
 // POST /api/overlay/activity/batch
 app.post("/api/overlay/activity/batch", requireUsernameKey, express.json(), (req, res) => {
@@ -720,7 +742,7 @@ app.post("/api/overlay/activity/batch", requireUsernameKey, express.json(), (req
     const data = {};
     const meta = {};
     for (const id of ids) {
-      const p = __USERNAME_MAPPING__.players[id];
+      const p = getPlayerCached(id, false) || loadPlayerIfExists(id);
       if (!p) {
         data[id] = "".padStart(spec.count, "0");
         meta[id] = Array.from({ length: spec.count }, () => ({}));
