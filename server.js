@@ -517,64 +517,67 @@ function makeBinsAndMeta(p, windowKey, tzOffsetMin){
 
 
 
-// Load usernames file to memory (compatible with your existing schema)
-
+const pollInFlight = Object.create(null);
 
 async function dbPollShard(serverKey) {
+  if (pollInFlight[serverKey]) return;
+  pollInFlight[serverKey] = true;
+
   try {
     const rsp = await fetch(dbToGamePlayersUrl(serverKey), { method: 'GET' });
-    if (!rsp.ok) throw new Error(`HTTP ${rsp.status}`);
+    if (!rsp.ok) throw new Error('HTTP ' + rsp.status);
 
     const data = await rsp.json();
-    const playersRaw = Array.isArray(data) ? data : (Array.isArray(data.players) ? data.players : []);
+    const playersRaw = Array.isArray(data) ? data : (Array.isArray(data && data.players) ? data.players : []);
 
-    const filtered = playersRaw.filter(p => {
-      const did  = typeof p?.privyId === 'string' && p.privyId.startsWith('did:privy:');
-      const name = (p?.name || '').trim();
-      const size = Number(p?.size) || 0;
-      return did && name && !/^anonymous player$/i.test(name) && size > 2;
+    const filtered = playersRaw.filter(function (p) {
+      const didOk = p && typeof p.privyId === 'string' && p.privyId.indexOf('did:privy:') === 0;
+      const name = ((p && p.name) ? String(p.name) : '').trim();
+      const size = Number(p && p.size) || 0;
+      return didOk && name && !/^anonymous player$/i.test(name) && size > 2;
     });
 
     const top = filtered
-      .filter(p => (Number(p?.monetaryValue) || 0) > 0)
-      .sort((a, b) => (Number(b?.monetaryValue) || 0) - (Number(a?.monetaryValue) || 0))
-      .map((p, i) => ({
-        privyId: p.privyId,
-        name: (p.name || '').trim(),
-        size: Number(p.size) || 0,
-        monetaryValue: Number(p.monetaryValue) || 0,
-        joinTime: Number(p.joinTime) || undefined,
-        rank: i + 1
-      }));
+      .filter(function (p) { return (Number(p && p.monetaryValue) || 0) > 0; })
+      .sort(function (a, b) { return (Number(b && b.monetaryValue) || 0) - (Number(a && a.monetaryValue) || 0); })
+      .map(function (p, i) {
+        return {
+          privyId: p.privyId,
+          name: ((p && p.name) ? String(p.name) : '').trim(),
+          size: Number(p && p.size) || 0,
+          monetaryValue: Number(p && p.monetaryValue) || 0,
+          joinTime: Number(p && p.joinTime) || undefined,
+          rank: i + 1
+        };
+      });
 
-    // optional: feed mapping/activity
     const ts = Date.now();
     const region = dbRegion(serverKey);
-    for (const p of top) {
-      recordActivity(p.privyId, ts, p.joinTime);
-      recordPing(p.privyId, p.name, region, ts);
+
+    for (let i = 0; i < top.length; i++) {
+      const tp = top[i];
+      recordActivity(tp.privyId, ts, tp.joinTime);
+      recordPing(tp.privyId, tp.name, region, ts);
     }
-    for (const p of filtered) {
-      const id = p.privyId;
-      const name = (p.name || '').trim();
+
+    for (let i = 0; i < filtered.length; i++) {
+      const fp = filtered[i];
+      const id = fp && fp.privyId;
+      const name = ((fp && fp.name) ? String(fp.name) : '').trim();
       if (id && name && !/^anonymous player$/i.test(name)) {
-        recordUsername({ privyId: id, username: name, realName: null, region });
+        recordUsername({ privyId: id, username: name, realName: null, region: region });
       }
     }
 
-        // keep only what clients need
-    dbShardCache[serverKey] = {
-      updatedAt: Date.now(),
-      count: filtered.length,
-      top: top
-    };
+    dbShardCache[serverKey] = { updatedAt: ts, count: filtered.length, top: top };
   } catch (e) {
     console.error('[poll]', serverKey, (e && e.message) ? e.message : e);
+  } finally {
+    pollInFlight[serverKey] = false;
   }
 }
 
-
-setInterval(() => { DB_SHARDS.forEach(dbPollShard); }, 5000);
+setInterval(function () { DB_SHARDS.forEach(function (k) { dbPollShard(k); }); }, 5000);
 
 
 
