@@ -378,7 +378,7 @@ async function showUserList() {
   // Fetch all players using pagination to avoid memory issues
   let allPlayers = {};
   let offset = 0;
-  const limit = 100; // Reduced to prevent 502 errors
+  const limit = 50; // Reduced to prevent server OOM
   let total = null;
   let fetchError = null;
 
