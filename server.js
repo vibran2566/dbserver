@@ -21,7 +21,7 @@ const DASHBOARD_PASS = process.env.DASHPASS || "";
 const PLAYER_DIR = path.join(DATA_DIR, "players"); // /data/players
 fs.mkdirSync(PLAYER_DIR, { recursive: true });
 
-const PLAYER_CACHE_MAX = Number(process.env.PLAYER_CACHE_MAX || 1200);
+const PLAYER_CACHE_MAX = Number(process.env.PLAYER_CACHE_MAX || 200);
 const __PLAYER_CACHE__ = new Map(); // did -> player (Map order = LRU)
 const __PLAYER_DIRTY__ = new Set(); // dids that need flush
 let __PLAYER_FLUSHING__ = false;
@@ -876,6 +876,23 @@ setInterval(() => {
   }
 }, 60000);
 
+// Cache the player file list to avoid readdirSync on every request
+let __PLAYER_FILES_CACHE__ = { files: [], updatedAt: 0 };
+const PLAYER_FILES_CACHE_TTL = 30000; // 30 seconds
+
+function getPlayerFilesCached() {
+  const now = Date.now();
+  if (now - __PLAYER_FILES_CACHE__.updatedAt > PLAYER_FILES_CACHE_TTL) {
+    try {
+      __PLAYER_FILES_CACHE__.files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith(".json"));
+      __PLAYER_FILES_CACHE__.updatedAt = now;
+    } catch (e) {
+      console.error("[player files cache]", e?.message || e);
+    }
+  }
+  return __PLAYER_FILES_CACHE__.files;
+}
+
 // Disk-only mapping (single source of truth)
 app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
   try {
@@ -889,16 +906,18 @@ app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
       return res.json(one ? { [did]: one } : {});
     }
 
-    // IMPORTANT: prevent accidental “dump the world” on low-memory plan
+    // IMPORTANT: prevent accidental dump on low-memory plan
     const all = String(req.query.all || "") === "1";
     if (!all) {
       return res.status(400).json({ ok:false, error:"missing_did", hint:"use ?did=did:privy:... OR ?all=1&limit=..." });
     }
 
-    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+    // Reduced default limit to prevent OOM
+    const limit = Math.max(1, Math.min(50, Number(req.query.limit || 50)));
     const offset = Math.max(0, Number(req.query.offset || 0));
 
-    const files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith(".json"));
+    const files = getPlayerFilesCached();
+    const total = files.length;
     const slice = files.slice(offset, offset + limit);
 
     const out = {};
@@ -909,12 +928,13 @@ app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
       if (clean) out[did2] = clean;
     }
 
-    return res.json({ ok:true, total: files.length, offset, limit, data: out });
+    return res.json({ ok:true, total, offset, limit, data: out });
   } catch (e) {
     console.error("/api/user/mapping:", e);
     return res.status(500).json({ ok: false, error: "server_error" });
   }
 });
+
 
 
 app.post("/api/user/client-xp", requireUsernameKey, jsonBody, (req, res) => {
