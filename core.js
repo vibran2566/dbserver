@@ -804,22 +804,11 @@ async function fetchCoreCode(key, version) {
   return filtered;
 }
 
+  // fetchMapping is deprecated - use fetchMappingBatch instead
+  // This function now just returns empty since the server requires specific IDs
   async function fetchMapping() {
-  var key = dbGetClientKey();
-  if (!key) return { players: {} };
-
-  var sk = resolveServerKey();
-  var url = USER_API_BASE + '/mapping?serverKey=' + encodeURIComponent(sk.serverKey);
-
-  var res = await fetch(url, {
-    cache: 'no-store',
-    headers: { 'Authorization': 'Bearer ' + key }
-  });
-
-  if (!res.ok) return { players: {} };
-  var j = await res.json().catch(function(){ return {}; });
-  return (j && j.players) ? j : { players: {} };
-}
+    return { players: {} };
+  }
 
 async function fetchMappingBatch(ids) {
   var key = dbGetClientKey();
@@ -883,7 +872,7 @@ async function fetchMappingBatch(ids) {
     }
   } catch (e) {}
 }, 15000);
-
+  }
 
   function stop() {
     if (TICK) { clearInterval(TICK); TICK = null; }
@@ -894,7 +883,6 @@ async function fetchMappingBatch(ids) {
 
   window.__USERNAME_TRACKER__ = { stop: stop, endpoint: playersEndpoint, version: UI_VER };
 // --- command runner (privy tools) ---
-(function () {
   function getMapThen(id, cb) {
     if (typeof cb !== "function") return;
     if (!id || typeof id !== "string") { cb(null, null); return; }
@@ -918,9 +906,6 @@ async function fetchMappingBatch(ids) {
         cb(null, null);
       });
   }
-
-  // keep/export getMapThen however your file currently uses it...
-})();
 
 
 
@@ -966,12 +951,6 @@ async function fetchMappingBatch(ids) {
   // Allow calling with the literal names (use bracket call in console):
   window['load-info'] = function(id){ return dbCmd('load-info ' + id); };
   window['load-time'] = function(id){ return dbCmd('load-time ' + id); };
-})();
-// === Inject fetch hook from Bootstrap (Option C) ===
-
-
-
-
 
   start();
 })();
