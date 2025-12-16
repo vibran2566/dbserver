@@ -731,14 +731,20 @@ input.addEventListener("keydown",async e=>{
       if (!did || !newName) {
         log("Usage: set-name did:privy:xxxx NewName");
       } else {
-        r = await fetch(`${API}/api/user/admin/set-name`, {
+        const res = await fetch(`${API}/api/user/admin/set-name`, {
           method: "POST",
           headers: {
             "admin-token": ADMIN_TOKEN,
             "Content-Type": "application/json"
           },
           body: JSON.stringify({ did, name: newName })
-        }).then(r => r.json());
+        });
+        const text = await res.text();
+        try {
+          r = JSON.parse(text);
+        } catch {
+          log(`Error: Server returned non-JSON (status ${res.status}): ${text.slice(0, 100)}`);
+        }
       }
     }
     else if (base === "set-size-note") {
@@ -809,12 +815,12 @@ input.addEventListener("keydown",async e=>{
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${ADMIN_TOKEN}`
+            "x-admin-token": ADMIN_TOKEN
           },
           body: JSON.stringify({ version })
         }).then(r => r.json());
 
-        if (res.ok) log(`✅ Core updated to ${res.version}`);
+        if (res.ok) log(`✅ Core updated to ${res.activeVersion}`);
         else log(`❌ Failed: ${res.error || "unknown error"}`);
       }
     }
