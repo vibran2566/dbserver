@@ -375,35 +375,115 @@ async function showUserKeys() {
 }
 
 async function showUserList() {
-  const res = await fetch(`${API}/api/user/mapping`, {
-    cache: "no-store",
-    headers: {
-      "Authorization": "Bearer " + DASH_USERNAME_KEY
-    }
-  });
+  // Fetch all players using pagination to avoid memory issues
+  let allPlayers = {};
+  let offset = 0;
+  const limit = 100; // Reduced to prevent 502 errors
+  let total = null;
+  let fetchError = null;
 
-  if (!res.ok) {
-    console.error("mapping failed", res.status);
-    show(`<div class="panel"><h3>Saved Usernames</h3><div>Error ${res.status}</div></div>`);
+  try {
+    while (true) {
+      const res = await fetch(`${API}/api/user/mapping?all=1&limit=${limit}&offset=${offset}`, {
+        cache: "no-store",
+        headers: {
+          "Authorization": "Bearer " + DASH_USERNAME_KEY
+        }
+      });
+
+      if (!res.ok) {
+        fetchError = `HTTP ${res.status}`;
+        break;
+      }
+
+      const d = await res.json().catch(() => null);
+      if (!d) {
+        fetchError = "Invalid JSON response";
+        break;
+      }
+
+      // Handle the response format
+      if (d.ok === false) {
+        fetchError = d.error || "Server returned error";
+        break;
+      }
+
+      total = d.total || 0;
+      const batch = d.data || {};
+      Object.assign(allPlayers, batch);
+
+      // If we got fewer than limit or reached total, we're done
+      const batchSize = Object.keys(batch).length;
+      if (batchSize < limit || offset + batchSize >= total) {
+        break;
+      }
+      offset += limit;
+      
+      // Safety: max 50 iterations (5000 players)
+      if (offset > 5000) break;
+    }
+  } catch (err) {
+    fetchError = err.message || String(err);
+  }
+
+  if (fetchError && Object.keys(allPlayers).length === 0) {
+    show(`<div class="panel"><h3>Saved Usernames</h3><div>Error: ${fetchError}</div></div>`);
     return;
   }
 
-  const d = await res.json().catch(() => null);
+  // Store globally for search
+  window.__ALL_PLAYERS__ = allPlayers;
+  window.__PLAYERS_TOTAL__ = total;
 
-  const players =
-    (d && d.players) ||
-    (d && d.usernames && d.usernames.players) || {};
+  renderPlayerList(allPlayers, total, "", true);
+}
+
+function renderPlayerList(players, total, searchTerm = "", fullRender = false) {
+  const count = Object.keys(players).length;
+  const totalLabel = total !== null ? total : count;
+
+  // If not full render, just update the results container
+  if (!fullRender && document.getElementById("playerResultsContainer")) {
+    const container = document.getElementById("playerResultsContainer");
+    const countEl = document.getElementById("playerCountLabel");
+    
+    if (countEl) {
+      countEl.textContent = searchTerm ? `${count} found / ${totalLabel} total` : `${totalLabel} total`;
+    }
+    
+    container.innerHTML = buildPlayerCards(players, searchTerm);
+    return;
+  }
 
   let html = `
     <div class="panel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <h3 style="margin:0;display:flex;align-items:center;gap:10px;">
-          Saved Usernames
+          Saved Usernames (<span id="playerCountLabel">${searchTerm ? count + " found / " : ""}${totalLabel} total</span>)
           <button class="refresh-btn" onclick="showUserList()">Refresh</button>
         </h3>
       </div>
+      <div style="margin-bottom:12px;">
+        <input type="text" id="playerSearch" placeholder="Search by privyId, username, or real name..." 
+          style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--fg);font-family:inherit;font-size:14px;box-sizing:border-box;"
+          value="${searchTerm.replace(/"/g, '&quot;')}"
+          oninput="handlePlayerSearch(this.value)">
+      </div>
+      <div id="playerResultsContainer">
+        ${buildPlayerCards(players, searchTerm)}
+      </div>
+    </div>
   `;
 
+  show(html);
+}
+
+function buildPlayerCards(players, searchTerm) {
+  if (Object.keys(players).length === 0) {
+    return `<div class="keycard"><i>${searchTerm ? "No players match your search." : "No players found."}</i></div>`;
+  }
+
+  let html = "";
   for (const [id, p] of Object.entries(players)) {
     const top = Array.isArray(p.topUsernames) && p.topUsernames.length
       ? p.topUsernames
@@ -428,9 +508,50 @@ async function showUserList() {
       </div>
     `;
   }
+  return html;
+}
 
-  html += `</div>`;
-  show(html);
+function handlePlayerSearch(term) {
+  const allPlayers = window.__ALL_PLAYERS__ || {};
+  const total = window.__PLAYERS_TOTAL__;
+  
+  if (!term || !term.trim()) {
+    renderPlayerList(allPlayers, total, "", false);
+    return;
+  }
+
+  const search = term.toLowerCase().trim();
+  const filtered = {};
+
+  for (const [id, p] of Object.entries(allPlayers)) {
+    // Match privyId
+    if (id.toLowerCase().includes(search)) {
+      filtered[id] = p;
+      continue;
+    }
+    
+    // Match realName
+    if (p.realName && p.realName.toLowerCase().includes(search)) {
+      filtered[id] = p;
+      continue;
+    }
+    
+    // Match any username (current or historical)
+    const usernames = Object.keys(p.usernames || {});
+    if (usernames.some(u => u.toLowerCase().includes(search))) {
+      filtered[id] = p;
+      continue;
+    }
+    
+    // Match topUsernames
+    const topNames = (p.topUsernames || []).map(t => t.name || "");
+    if (topNames.some(n => n.toLowerCase().includes(search))) {
+      filtered[id] = p;
+      continue;
+    }
+  }
+
+  renderPlayerList(filtered, total, term, false);
 }
 
 /* ---------- NEW: XP Headers Page ---------- */
