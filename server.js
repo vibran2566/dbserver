@@ -764,14 +764,14 @@ app.post("/api/overlay/activity/batch", requireUsernameKey, express.json(), (req
 app.get("/api/game/usernames", requireUsernameKey, (req, res) => {
   try {
     const all = String(req.query.all || "") === "1";
-    const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
+    const limit = Math.max(1, Math.min(50, Number(req.query.limit || 50)));
     const offset = Math.max(0, Number(req.query.offset || 0));
 
     if (!all) {
       return res.json({ ok:true, note:"use ?all=1&limit=&offset=", total: null, offset, limit, usernames: { players: {} } });
     }
 
-    const files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith(".json"));
+    const files = getPlayerFilesCached();
     const slice = files.slice(offset, offset + limit);
 
     const players = {};
@@ -839,26 +839,29 @@ try {
 
 app.post("/api/user/admin/set-name", express.json(), async (req, res) => {
   try {
+    // Auth check
+    const token = req.header("admin-token");
+    if (token !== ADMIN_TOKEN) {
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    }
+
     const { did, name } = req.body || {};
     if (!did || !did.startsWith("did:privy:") || !name) {
       return res.status(400).json({ ok:false, error:"invalid_input" });
     }
     const clean = String(name).trim().slice(0, 64);
 
-    // ensure player exists in the in-memory map
-    const p = (__USERNAME_MAPPING__.players[did] ||= {
-      realName: null,
-      usernames: {},
-      topUsernames: [],
-      firstSeen: Date.now(),
-      lastSeen: 0
-    });
+    // Use the per-player disk storage system (create if doesn't exist)
+    const p = getPlayerCached(did, true);
+    if (!p) {
+      return res.status(500).json({ ok:false, error:"failed_to_get_player" });
+    }
 
     p.realName = clean;
-    __USERNAME_MAPPING__.updatedAt = Date.now();
-
-    // persist immediately so the file and memory match
-    await flushUsernamesNow();
+    markDirty(did);
+    
+    // Flush immediately so it persists
+    flushDirtyPlayersNow();
 
     res.json({ ok:true, did, realName: p.realName });
   } catch (e) {
