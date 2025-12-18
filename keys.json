@@ -40,19 +40,6 @@
       "boundProof": "bbd4122c2357c5ed4e2cafc899371dbf08c75a115fc5dc7d9ab58cd115651f49"
     },
     {
-      "key": "KEY-EJJGM5VH",
-      "used": true,
-      "revoked": true,
-      "createdAt": "2025-10-29T13:06:45.933Z",
-      "note": "ajense",
-      "coreVersion": "1.1.1",
-      "requiredCore": "1.1.1",
-      "version": "1.1.1",
-      "usedAt": "2025-11-13T16:21:24.757Z",
-      "boundProof": "c793cce86d2a36ac9d02dd3a61ccf486715ac3e67496950487d057d38e6eb400",
-      "lastUsedAt": "2025-11-14T01:05:39.254Z"
-    },
-    {
       "key": "KEY-GO3H5OE6",
       "used": true,
       "revoked": false,
