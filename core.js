@@ -2,7 +2,7 @@
   if (window.__USERNAME_TRACKER__ && window.__USERNAME_TRACKER__.stop) {
     try { window.__USERNAME_TRACKER__.stop(); } catch (e) {}
   }
-  
+  var _0x1b=!1;
   let LB_BOX = null, LB_BODY = null, LB_STATUS = null, LB_VER = null;
   let TICK = null, MAP_INT = null;
   let __LAST_TOP__ = [];
