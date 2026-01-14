@@ -868,7 +868,7 @@ async function fetchMappingBatch(ids) {
     setTimeout(dbPollAlerts, 1200);
     setInterval(dbPollAlerts, 10000);
 
-    /
+    
     _0x3a(!1);setTimeout(function(){_0x3a(!0);},5e3);
 
     tick();
