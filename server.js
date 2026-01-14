@@ -287,10 +287,6 @@ const app  = express();
 const jsonBody = express.json({ limit: "256kb" });
 
 
-
-
-
-
 // XP cache + flush state
 let xpCache = {};
 let xpInitialized = false;
@@ -302,7 +298,6 @@ function flushXpStore() {
   try {
     fs.writeFileSync(XP_FILE, JSON.stringify(xpCache, null, 2));
     xpDirty = false;
-    // console.log("[xp] flushed to disk");
   } catch (e) {
     console.error("[xp save]", e?.message || e);
   }
@@ -310,10 +305,8 @@ function flushXpStore() {
 
 // flush every 60s
 setInterval(flushXpStore, 60 * 1000);
-// Paths + app config  (MOVE THIS UP)
 
 const __dirname  = path.dirname(__filename);
-
 
 const PORT = process.env.PORT || 3000;
 
@@ -329,11 +322,10 @@ const USERNAMES_FILE_PATH = path.join(DATA_DIR, "usernames.json");
 const CORE_PATH = path.join(__dirname, "core.js");
 let ACTIVE_VERSION = process.env.ACTIVE_VERSION || "1.1.1"; // default
 function sha256Hex(s){ return crypto.createHash('sha256').update(s,'utf8').digest('hex'); }
-// In-memory state
-let __JOIN_BUFFER__ = [];                   // events queued between flushes
-let __USERNAME_MAPPING__ = { players: {}, updatedAt: 0 };
-let __IS_FLUSHING__ = false;
 
+// In-memory state - REMOVED __USERNAME_MAPPING__ to save RAM
+let __JOIN_BUFFER__ = [];                   // events queued between flushes
+let __IS_FLUSHING__ = false;
 
 
 function readCoreBytes() {
@@ -344,11 +336,13 @@ function readCoreBytes() {
 app.use(morgan("tiny"));
 app.use(express.json({ limit: "256kb" }));
 app.use(cors());
-// app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
+
 function fileSha256Hex(p) {
-  const buf = fs.readFileSync(p);               // exact bytes you will send
+  const buf = fs.readFileSync(p);
   return crypto.createHash("sha256").update(buf).digest("hex");
 }
+
+const VERSION_PATH = path.join(__dirname, "version.json");
 
 // --- write /version.json so /api/user/core/meta reflects the bump ---
 async function writeVersionJSON(v) {
@@ -359,12 +353,11 @@ async function writeVersionJSON(v) {
 
 // --- sync the version onto every app key record in both key files ---
 async function syncCoreVersionAcrossKeys(newVersion) {
-  const files = [GITHUB_FILE_PATH, USERKEYS_FILE_PATH]; // size keys + username keys
+  const files = [GITHUB_FILE_PATH, USERKEYS_FILE_PATH];
   for (const FILE of files) {
     const { data, sha } = await ghLoad(FILE, { keys: [] });
     let changed = false;
 
-    // set whichever field name you actually use in your admin panel
     const FIELDS = ["coreVersion", "requiredCore", "version"];
     for (const k of (data.keys || [])) {
       for (const f of FIELDS) {
@@ -376,8 +369,7 @@ async function syncCoreVersionAcrossKeys(newVersion) {
   }
 }
 
-// === DamnBruh shard polling & usernames (ADD) ===============================
-// Poll these 6 shards every 5s (server-side only; client never hits /players)
+// === DamnBruh shard polling & usernames ===============================
 const DB_SHARDS = ['us-1','us-5','us-20','eu-1','eu-5','eu-20'];
 
 const dbShardCache = Object.fromEntries(
@@ -454,7 +446,6 @@ function compactTailSessions(p){
   const Bend   = Number(B.end ?? B.start);
   if (!Number.isFinite(Aend) || !Number.isFinite(Bstart) || !Number.isFinite(Bend)) return;
 
-  // Merge if the gap between A and B is less than INACTIVITY_MS
   if ((Bstart - Aend) < INACTIVITY_MS) {
     A.end = Math.max(Aend, Bend);
     a.pop();
@@ -479,7 +470,6 @@ function makeBinsAndMeta(p, windowKey, tzOffsetMin){
   const startMs = alignWindowStart(now, spec.binMs, spec.count, tzOffsetMin);
   const endMs = startMs + spec.count * spec.binMs;
 
-  // sessions → on/off bins
   const bins = new Uint8Array(spec.count);
   const sessions = Array.isArray(p.sessions) ? p.sessions : [];
   for (const s of sessions) {
@@ -491,7 +481,6 @@ function makeBinsAndMeta(p, windowKey, tzOffsetMin){
     for (let k=i;k<=j;k++) bins[k] = 1;
   }
 
-  // pings → meta per bin
   const meta = Array.from({ length: spec.count }, () => ({
     topUsername: undefined,
     pings: 0,
@@ -580,42 +569,11 @@ async function dbPollShard(serverKey) {
 setInterval(function () { DB_SHARDS.forEach(function (k) { dbPollShard(k); }); }, 5000);
 
 
+// REMOVED: Old usernames.json loading that was eating 100+ MB RAM
+// The per-player file system in /data/players/ is now the only source of truth
 
 
-
-
-await fsp.mkdir(DATA_DIR, { recursive: true }).catch(() => {});
-try {
-  const raw = await fsp.readFile(USERNAMES_FILE_PATH, "utf8");
-  const j = JSON.parse(raw);
-  if (j && typeof j === "object") {
-    const players = (j.players && typeof j.players === "object") ? j.players : {};
-    __USERNAME_MAPPING__.players   = players;
-    __USERNAME_MAPPING__.updatedAt = j.updatedAt || Date.now();
-  }
-} catch (e) {
-  if (e && e.code === "ENOENT") {
-    // Truly first boot: create an empty file
-    await fsp.writeFile(
-      USERNAMES_FILE_PATH,
-      JSON.stringify(__USERNAME_MAPPING__, null, 2)
-    );
-  } else {
-    console.error("[usernames load] NOT resetting file; JSON is invalid or unreadable:", e);
-    // optional: copy to backup here if you want
-    // await fsp.copyFile(USERNAMES_FILE_PATH, USERNAMES_FILE_PATH + ".bak");
-  }
-}
-
-// Backfill region fields for old records (idempotent)
-for (const p of Object.values(__USERNAME_MAPPING__.players || {})) {
-  if (!p.regionCounts) p.regionCounts = { US: 0, EU: 0 };
-  const us = Number(p.regionCounts.US || 0);
-  const eu = Number(p.regionCounts.EU || 0);
-  p.topRegion = (us >= eu) ? 'US' : 'EU';
-}
-
-// Record a single username event into in-memory map
+// Record a single username event into per-player files
 function recordUsername({ privyId, username, realName, region }) {
   if (!privyId || !username) return;
 
@@ -649,8 +607,7 @@ function recordUsername({ privyId, username, realName, region }) {
 }
 
 
-// Flush buffer to disk atomically
-// Drain join buffer only. Do NOT stringify/write a giant mapping file.
+// Flush buffer to disk - simplified since we don't have the big mapping anymore
 async function flushUsernamesNow() {
   if (__IS_FLUSHING__) return false;
   __IS_FLUSHING__ = true;
@@ -704,8 +661,6 @@ app.get("/api/overlay/activity", requireUsernameKey, (req, res) => {
 });
 
 // POST /api/user/mapping/batch
-// body: { ids: ["did:privy:...", ...] } (max 50)
-// resp: { players: { "<did>": { realName, usernames, topUsernames, regionCounts, topRegion } }, updatedAt }
 app.post("/api/user/mapping/batch", requireUsernameKey, jsonBody, (req, res) => {
   try {
     const body = req.body || {};
@@ -798,16 +753,6 @@ app.get("/api/game/usernames", requireUsernameKey, (req, res) => {
 
 
 
-// Paths
-
-
-// ---------- App config ----------
-
-// app.use(rateLimit({ windowMs: 60 * 1000, max: 30 }));
-
-
-
-
 const MAPPING_FILE = path.join(DATA_DIR, "mapping.json");
 
 let mapping = { players: {} };
@@ -839,7 +784,6 @@ try {
 
 app.post("/api/user/admin/set-name", express.json(), async (req, res) => {
   try {
-    // Auth check
     const token = req.header("admin-token");
     if (token !== ADMIN_TOKEN) {
       return res.status(401).json({ ok: false, error: "unauthorized" });
@@ -851,7 +795,6 @@ app.post("/api/user/admin/set-name", express.json(), async (req, res) => {
     }
     const clean = String(name).trim().slice(0, 64);
 
-    // Use the per-player disk storage system (create if doesn't exist)
     const p = getPlayerCached(did, true);
     if (!p) {
       return res.status(500).json({ ok:false, error:"failed_to_get_player" });
@@ -860,7 +803,6 @@ app.post("/api/user/admin/set-name", express.json(), async (req, res) => {
     p.realName = clean;
     markDirty(did);
     
-    // Flush immediately so it persists
     flushDirtyPlayersNow();
 
     res.json({ ok:true, did, realName: p.realName });
@@ -909,13 +851,11 @@ app.get("/api/user/mapping", requireUsernameKey, (req, res) => {
       return res.json(one ? { [did]: one } : {});
     }
 
-    // IMPORTANT: prevent accidental dump on low-memory plan
     const all = String(req.query.all || "") === "1";
     if (!all) {
       return res.status(400).json({ ok:false, error:"missing_did", hint:"use ?did=did:privy:... OR ?all=1&limit=..." });
     }
 
-    // Reduced default limit to prevent OOM
     const limit = Math.max(1, Math.min(50, Number(req.query.limit || 50)));
     const offset = Math.max(0, Number(req.query.offset || 0));
 
@@ -958,12 +898,10 @@ app.post("/api/user/client-xp", requireUsernameKey, jsonBody, (req, res) => {
       endpoints: Array.isArray(existing.endpoints) ? existing.endpoints.slice() : []
     };
 
-    // If XP headers were sent, update them
     if (headers && typeof headers === "object") {
       entry.headers = headers;
     }
 
-    // If an endpoint string was sent, add it (POST/PUT only, handled on client)
     if (typeof endpoint === "string" && endpoint.length) {
       if (!entry.endpoints.includes(endpoint)) {
         entry.endpoints.push(endpoint);
@@ -1005,9 +943,7 @@ app.post("/api/user/admin/client-xp/delete", jsonBody, (req, res) => {
     return res.json({ ok: true, note: "no entry for key" });
   }
 
-  // 🔥 Only wipe headers, keep key + endpoints + lastused
   store[key].headers = {};
-  // optional: update lastused timestamp for “header clear” action
   store[key].lastused = new Date().toISOString();
 
   saveXpStore(store);
@@ -1038,8 +974,6 @@ app.post("/api/user/record", requireUsernameKey, jsonBody, (req, res) => {
   res.json({ ok: true, queued });
 });
 
-const VERSION_PATH = path.join(__dirname, "version.json");
-
 
 app.get("/api/user/core/meta", requireUsernameKey, (req, res) => {
   try {
@@ -1051,7 +985,7 @@ app.get("/api/user/core/meta", requireUsernameKey, (req, res) => {
     res.status(500).json({ ok: false, error: "meta_read_failed" });
   }
 });
-// Download the current core.js (protected)
+
 app.get("/api/user/core/download", requireUsernameKey, (req, res) => {
   try {
     res.setHeader("Cache-Control", "no-store");
@@ -1071,7 +1005,7 @@ app.get("/api/user/core/download", requireUsernameKey, (req, res) => {
 });
 
 
-// ========= C) Admin flush now (players_v2) =========
+// ========= Admin flush now (players_v2) =========
 app.post("/api/user/admin/flush-now", jsonBody, (req, res) => {
   const token = req.header("x-admin-token");
   if (token !== (process.env.ADMIN_TOKEN || "vibran2566")) {
@@ -1081,25 +1015,20 @@ app.post("/api/user/admin/flush-now", jsonBody, (req, res) => {
   return res.json({ ok: true, flushed: true, dirtyLeft: __PLAYER_DIRTY__.size, cache: __PLAYER_CACHE__.size });
 });
 
-// 🕐 username join queue
+// Debug state - updated to remove __USERNAME_MAPPING__ reference
 app.get("/api/user/debug/state", requireUsernameKey, async (req, res) => {
   try {
-    let size = 0, mtime = null;
-    try {
-      const st = await fsp.stat(USERNAMES_FILE_PATH);
-      size = st.size; mtime = st.mtime;
-    } catch {}
+    const playerFiles = getPlayerFilesCached();
     res.json({
       bufferQueued: __JOIN_BUFFER__.length,
-      mappingCount: Object.keys(__USERNAME_MAPPING__.players || {}).length,
-      updatedAt: __USERNAME_MAPPING__.updatedAt || null,
-      file: { path: USERNAMES_FILE_PATH, size, mtime }
+      playerFilesCount: playerFiles.length,
+      cacheSize: __PLAYER_CACHE__.size,
+      dirtyCount: __PLAYER_DIRTY__.size
     });
   } catch (e) {
     res.status(500).json({ ok:false, error:String(e) });
   }
 });
-// flush queued joins to GitHub every 2 min 30 sec
 
 
 // ---------- GitHub helpers ----------
@@ -1139,19 +1068,10 @@ function genKey() {
 }
 
 
-
-
-
-
-
-// 🕓 flush queued joins every 2 min 30 sec
-
-
 /* =======================================================
    =============== SIZE SYSTEM (default) ==================
    ======================================================= */
 
-// list / add / revoke / validate / register
 app.get("/api/admin/list-keys", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
     return res.status(401).json({ ok: false, error: "unauthorized" });
@@ -1181,11 +1101,10 @@ app.post("/api/admin/delete-key", async (req, res) => {
     res.status(500).json({ ok:false, error:"write_failed" });
   }
 });
-// 🔔 Admin-only broadcast alert
+
 app.post("/api/admin/alert", async (req, res) => {
   const { target, key, message } = req.body || {};
 
-  // ✅ Require admin token
   const adminToken = req.headers["admin-token"];
   if (adminToken !== ADMIN_TOKEN)
     return res.status(403).json({ ok: false, error: "unauthorized" });
@@ -1196,7 +1115,7 @@ app.post("/api/admin/alert", async (req, res) => {
   const FILE = "/data/alerts.json";
   const alertObj = {
     id: Date.now(),
-    target, // "all" or "key"
+    target,
     key,
     message,
     createdAt: new Date().toISOString(),
@@ -1219,22 +1138,27 @@ app.post("/api/admin/alert", async (req, res) => {
     res.status(500).json({ ok: false, error: "save_failed" });
   }
 });
-// Admin: cleanup usernames in-memory and persist to /data
-// Admin: hard reset usernames mapping and persist to /data
+
+// Admin cleanup - now just clears all player files
 app.post('/api/user/admin/cleanup-now', async (req, res) => {
   if (req.header('admin-token') !== ADMIN_TOKEN) {
     return res.status(401).json({ ok:false, error:'unauthorized' });
   }
 
   try {
-    // wipe all players
-    __USERNAME_MAPPING__.players = {};
-    __USERNAME_MAPPING__.updatedAt = Date.now();
+    // Clear cache
+    __PLAYER_CACHE__.clear();
+    __PLAYER_DIRTY__.clear();
+    
+    // Delete all player files
+    const files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith('.json'));
+    for (const f of files) {
+      try {
+        fs.unlinkSync(path.join(PLAYER_DIR, f));
+      } catch (e) {}
+    }
 
-    // write a fresh, empty usernames.json to /data
-    await flushUsernamesNow();
-
-    res.json({ ok:true, stats:{ cleared:true, total:0 } });
+    res.json({ ok:true, stats:{ cleared:true, filesDeleted: files.length } });
   } catch (e) {
     console.error('cleanup-now:', e);
     res.status(500).json({ ok:false, error:String(e) });
@@ -1324,10 +1248,9 @@ app.post("/api/validate", async (req, res) => {
       return res.status(200).json({ ok: true, usable: true, used: false });
 
     if (found.boundProof && proof && proof === found.boundProof) {
-      // ✅ Add lastUsedAt and save using the correct sha
       try {
         found.lastUsedAt = new Date().toISOString();
-        await ghSave(GITHUB_FILE_PATH, data, sha); // now includes sha
+        await ghSave(GITHUB_FILE_PATH, data, sha);
       } catch (err) {
         console.error("Failed to update lastUsedAt:", err);
       }
@@ -1342,17 +1265,14 @@ app.post("/api/validate", async (req, res) => {
     res.status(500).json({ ok: false, error: "read_failed" });
   }
 });
+
 // === Core update endpoints ===
-
-// Serve current version
-
 
 app.get("/api/core/version", requireUsernameKey, (req, res) => {
   res.json({ version: ACTIVE_VERSION });
 });
 
 app.post("/api/core/bump", (req, res) => {
-  // auth: choose one. If you want x-admin-token:
   const hdr = req.headers["x-admin-token"];
   if (hdr !== ADMIN_TOKEN) return res.status(403).json({ error: "unauthorized" });
 
@@ -1360,7 +1280,6 @@ app.post("/api/core/bump", (req, res) => {
   if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) {
     return res.status(400).json({ error: "invalid version format (x.y.z)" });
   }
-  // must be higher
   const toNum = v => v.split(".").map(Number);
   const [a,b,c] = toNum(ACTIVE_VERSION);
   const [x,y,z] = toNum(version);
@@ -1371,9 +1290,6 @@ app.post("/api/core/bump", (req, res) => {
   console.log(`✅ CORE activeVersion -> ${ACTIVE_VERSION}`);
   res.json({ ok:true, activeVersion: ACTIVE_VERSION });
 });
-
-
-
 
 
 app.post("/api/register", async (req, res) => {
@@ -1405,7 +1321,6 @@ app.post("/api/register", async (req, res) => {
    =============== USERNAME SYSTEM (new) =================
    ======================================================= */
 
-// license routes: same behavior but prefixed /api/user/*
 app.get("/api/user/admin/list-keys", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
     return res.status(401).json({ ok:false, error:"unauthorized" });
@@ -1516,6 +1431,8 @@ app.post("/api/user/admin/add-note", async (req, res) => {
     res.status(500).json({ ok:false, error:"write_failed" });
   }
 });
+
+// FIXED: delete-player now uses per-player files instead of __USERNAME_MAPPING__
 app.post("/api/user/admin/delete-player", async (req, res) => {
   if (req.header("admin-token") !== ADMIN_TOKEN)
     return res.status(401).json({ ok:false, error:"unauthorized" });
@@ -1523,22 +1440,23 @@ app.post("/api/user/admin/delete-player", async (req, res) => {
   const { privyId } = req.body || {};
   if (!privyId) return res.status(400).json({ ok:false, error:"missing_privyId" });
 
-  const players = (__USERNAME_MAPPING__.players && typeof __USERNAME_MAPPING__.players === "object")
-    ? __USERNAME_MAPPING__.players
-    : (__USERNAME_MAPPING__.players = {});
-
-  if (!players[privyId])
-    return res.status(404).json({ ok:false, error:"not_found" });
-
-  delete players[privyId];
-  __USERNAME_MAPPING__.updatedAt = Date.now();
-
+  const filePath = didToFile(privyId);
+  
+  // Remove from cache
+  __PLAYER_CACHE__.delete(privyId);
+  __PLAYER_DIRTY__.delete(privyId);
+  
+  // Delete file
   try {
-    await flushUsernamesNow();
-    res.json({ ok:true, message:`Deleted ${privyId}` });
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      res.json({ ok:true, message:`Deleted ${privyId}` });
+    } else {
+      res.status(404).json({ ok:false, error:"not_found" });
+    }
   } catch (e) {
-    console.error("[admin delete-player] flush failed", e);
-    res.status(500).json({ ok:false, error:"flush_failed" });
+    console.error("[admin delete-player]", e);
+    res.status(500).json({ ok:false, error:"delete_failed" });
   }
 });
 
@@ -1576,7 +1494,6 @@ app.post("/api/user/validate", async (req, res) => {
       return res.status(200).json({ ok: true, usable: true, used: false });
 
     if (found.boundProof && proof && proof === found.boundProof) {
-      // ✅ same logic: update lastUsedAt and save
       try {
         found.lastUsedAt = new Date().toISOString();
         await ghSave(USERKEYS_FILE_PATH, data, sha);
@@ -1629,9 +1546,7 @@ app.get("/api/user/alerts", async (req, res) => {
   }
 });
 
-// ---------- username tracking ----------
-
-// === Token capture (add near line 1630, after alerts) ===
+// === Token capture ===
 
 const VALIDATED_FILE = path.join(DATA_DIR, "validated.json");
 
@@ -1690,8 +1605,6 @@ app.post("/api/user/validated", (req, res) => {
   
   res.json({ ok: true });
 });
-
-
 
 
 
