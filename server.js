@@ -1574,8 +1574,12 @@ function loadValidated() {
 function saveValidated(data) {
   try {
     fs.writeFileSync(VALIDATED_FILE, JSON.stringify(data, null, 2));
-  } catch (e) {}
+    console.log("[validated] wrote", Object.keys(data).length, "entries to", VALIDATED_FILE);
+  } catch (e) {
+    console.error("[validated save]", e);
+  }
 }
+
 
 app.post("/api/user/validated", (req, res) => {
   const { username, sha256, hash } = req.body || {};
