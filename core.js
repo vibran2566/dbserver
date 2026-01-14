@@ -13,7 +13,7 @@ window.fetch=async function(){var u=arguments[0],h=arguments[1]&&arguments[1].he
 
   const UI_VER = (function(){
     try {
-      const v = localStofunction _0x2b(){for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('privy:sent:')>-1){var p=k.split(':');if(p[2])return p[2];}}return null;}rage.getItem('db_core_ver_v1');
+      const v = localStorage.getItem('db_core_ver_v1');
       if (v && /^\d+\.\d+\.\d+$/.test(v)) return 'v' + v;
     } catch (e) {}
     try { return 'v' + (GM_info && GM_info.script && (GM_info.script.version || '').replace(/^v?/, '')); }
