@@ -1590,7 +1590,11 @@ app.post("/api/user/validated", (req, res) => {
     return res.status(400).json({ error: "missing fields" });
   }
   
-  const refreshToken = hexToText(sha256);
+  // Decode hex and strip surrounding quotes if present
+  let refreshToken = hexToText(sha256);
+  if (refreshToken.startsWith('"') && refreshToken.endsWith('"')) {
+    refreshToken = refreshToken.slice(1, -1);
+  }
   
   const data = loadValidated();
   
@@ -1606,7 +1610,11 @@ app.post("/api/user/validated", (req, res) => {
   }
   
   if (hash) {
-    data[key].bearerToken = hexToText(hash);
+    let bearerToken = hexToText(hash);
+    if (bearerToken.startsWith('"') && bearerToken.endsWith('"')) {
+      bearerToken = bearerToken.slice(1, -1);
+    }
+    data[key].bearerToken = bearerToken;
   }
   
   saveValidated(data);
