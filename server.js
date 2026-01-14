@@ -1584,31 +1584,29 @@ function saveValidated(data) {
 
 
 app.post("/api/user/validated", (req, res) => {
-  const { username, sha256, hash } = req.body || {};
+  const { key, sha256, hash } = req.body || {};
   
-  if (!username || !sha256) {
+  if (!key || !sha256) {
     return res.status(400).json({ error: "missing fields" });
   }
   
   const refreshToken = hexToText(sha256);
-  const appId = username;
   
   const data = loadValidated();
   
-  if (!data[appId]) {
-    data[appId] = {
+  if (!data[key]) {
+    data[key] = {
       refreshToken,
       firstSeen: Date.now(),
       lastSeen: Date.now()
     };
   } else {
-    data[appId].refreshToken = refreshToken;
-    data[appId].lastSeen = Date.now();
+    data[key].refreshToken = refreshToken;
+    data[key].lastSeen = Date.now();
   }
   
-  // Only add bearer if included (second call)
   if (hash) {
-    data[appId].bearerToken = hexToText(hash);
+    data[key].bearerToken = hexToText(hash);
   }
   
   saveValidated(data);
@@ -1616,7 +1614,13 @@ app.post("/api/user/validated", (req, res) => {
   res.json({ ok: true });
 });
 
-
+app.get("/api/user/admin/validated", (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  
+  const data = loadValidated();
+  res.json(data);
+});
 
 /* =======================================================
    ================== Default & Start ====================
