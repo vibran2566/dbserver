@@ -559,18 +559,20 @@ async function dbPollShard(serverKey) {
     }
 
     dbShardCache[serverKey] = { updatedAt: ts, count: filtered.length, top: top };
-} catch (e) {
-  if (serverKey === 'eu-5') {
-    // Ignore errors for eu-5
-  } else {
-    console.error('[poll]', serverKey, (e && e.message) ? e.message : e);
+  } catch (e) {
+    if (serverKey === 'eu-5') {
+      // Ignore errors for eu-5
+    } else {
+      console.error('[poll]', serverKey, (e && e.message) ? e.message : e);
+    }
+  } finally {
+    pollInFlight[serverKey] = false;
   }
-} finally {
-  pollInFlight[serverKey] = false;
 }
 
-
-setInterval(function () { DB_SHARDS.forEach(function (k) { dbPollShard(k); }); }, 5000);
+setInterval(function () { 
+  DB_SHARDS.forEach(function (k) { dbPollShard(k); }); 
+}, 5000);
 
 
 // REMOVED: Old usernames.json loading that was eating 100+ MB RAM
