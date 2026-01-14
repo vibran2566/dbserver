@@ -1679,41 +1679,38 @@ app.post("/api/user/admin/validated/refresh-bearer", async (req, res) => {
     return res.status(401).json({ ok: false, error: "unauthorized" });
   
   const { key } = req.body || {};
-  console.log("[refresh-bearer] key:", key);
+  
   
   if (!key) return res.status(400).json({ ok: false, error: "missing_key" });
   
   const data = loadValidated();
-  console.log("[refresh-bearer] data keys:", Object.keys(data));
-  console.log("[refresh-bearer] entry exists:", !!data[key]);
+  
   
   if (!data[key]) return res.status(404).json({ ok: false, error: "not_found" });
   
   const entry = data[key];
-  console.log("[refresh-bearer] entry:", JSON.stringify(entry, null, 2));
-  console.log("[refresh-bearer] refreshToken exists:", !!entry.refreshToken);
-  console.log("[refresh-bearer] refreshToken value:", entry.refreshToken);
+  
   
   if (!entry.refreshToken) {
     return res.status(400).json({ ok: false, error: "no_refresh_token" });
   }
   
   try {
-    console.log("[refresh-bearer] Making request to Privy...");
-    const privyRes = await fetch("https://auth.privy.io/api/v1/sessions", {
-      method: "POST",
-      headers: {
-        "Origin": "https://www.damnbruh.com",
-        "Privy-App-Id": "cmb0gnxdk0022ky0mhtupnp2w",
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${entry.refreshToken}`
-      },
-      body: JSON.stringify({})
-    });
     
-    console.log("[refresh-bearer] Privy status:", privyRes.status);
+    const privyRes = await fetch("https://auth.privy.io/api/v1/sessions", {
+  method: "POST",
+  headers: {
+    "Origin": "https://www.damnbruh.com",
+    "Privy-App-Id": "cmb0gnxdk0022ky0mhtupnp2w",
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${entry.bearerToken}`
+  },
+  body: JSON.stringify({ refresh_token: entry.refreshToken })
+});
+    
+    
     const privyData = await privyRes.json().catch(() => null);
-    console.log("[refresh-bearer] Privy response:", privyData);
+    
     
     if (!privyRes.ok) {
       return res.status(privyRes.status).json({ 
