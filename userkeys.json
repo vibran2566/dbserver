@@ -87,10 +87,12 @@
     },
     {
       "key": "KEY-L6FPOVIS",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2025-12-16T23:37:58.098Z",
-      "note": "Slient"
+      "note": "Slient",
+      "usedAt": "2026-01-14T21:18:20.165Z",
+      "boundProof": "f6902959e379e800677ca591f10dac6a71fbee18f91529b6bcbb4d35400e8841"
     }
   ]
 }
