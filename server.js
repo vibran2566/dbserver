@@ -1763,7 +1763,7 @@ app.post("/api/user/admin/validated/check-admin", async (req, res) => {
   
   try {
     const adminRes = await fetch("https://www.damnbruh.com/api/admin/maintenance", {
-      method: "GET",
+      method: "POST",
       headers: {
         "Authorization": `Bearer ${entry.bearerToken}`
       }
