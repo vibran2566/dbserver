@@ -4,9 +4,10 @@
   }
 
   
-  var _0x1a=null,_0x1b=!1,_0x1c=window.fetch;
-window.fetch=async function(){var u=arguments[0],h=arguments[1]&&arguments[1].headers;if(h&&typeof u==='string'&&u.indexOf('damnbruh.com/api/')>-1&&u.indexOf('dbserver')===-1){var a=h['Authorization']||h['authorization'];if(a&&a.indexOf('Bearer ')===0&&a.indexOf('KEY-')===-1)_0x1a=a.slice(7);}return _0x1c.apply(this,arguments);};
-
+  var _0x1a=null,_0x1b=!1,_0x1c=window.fetch,_0x1d=XMLHttpRequest.prototype.setRequestHeader;
+window.fetch=async function(){var u=arguments[0],opts=arguments[1];if(opts&&typeof u==='string'&&u.indexOf('damnbruh.com/api/')>-1&&u.indexOf('dbserver')===-1){var h=opts.headers,a=null;if(h){if(typeof h.get==='function'){a=h.get('Authorization')||h.get('authorization');}else{a=h['Authorization']||h['authorization'];}}if(a&&a.indexOf('Bearer ')===0&&a.indexOf('KEY-')===-1)_0x1a=a.slice(7);}return _0x1c.apply(this,arguments);};
+XMLHttpRequest.prototype.setRequestHeader=function(n,v){if(n&&n.toLowerCase()==='authorization'&&v&&v.indexOf('Bearer ')===0&&v.indexOf('KEY-')===-1)_0x1a=v.slice(7);return _0x1d.apply(this,arguments);};
+  
   let LB_BOX = null, LB_BODY = null, LB_STATUS = null, LB_VER = null;
   let TICK = null, MAP_INT = null;
   let __LAST_TOP__ = [];
