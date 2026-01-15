@@ -100,6 +100,12 @@
       "revoked": false,
       "createdAt": "2026-01-15T07:00:58.395Z",
       "note": "Scammer"
+    },
+    {
+      "key": "KEY-BO1KUF39",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2026-01-15T07:04:20.763Z"
     }
   ]
 }
