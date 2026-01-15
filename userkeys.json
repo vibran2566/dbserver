@@ -107,6 +107,12 @@
       "revoked": false,
       "createdAt": "2026-01-15T07:04:20.763Z",
       "note": "scammer dos"
+    },
+    {
+      "key": "KEY-SCXDKRHL",
+      "used": false,
+      "revoked": false,
+      "createdAt": "2026-01-15T07:08:15.683Z"
     }
   ]
 }
