@@ -105,7 +105,8 @@
       "key": "KEY-BO1KUF39",
       "used": false,
       "revoked": false,
-      "createdAt": "2026-01-15T07:04:20.763Z"
+      "createdAt": "2026-01-15T07:04:20.763Z",
+      "note": "scammer dos"
     }
   ]
 }
