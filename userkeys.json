@@ -127,7 +127,8 @@
       "key": "KEY-FL7HA863",
       "used": false,
       "revoked": false,
-      "createdAt": "2026-01-16T17:43:12.413Z"
+      "createdAt": "2026-01-16T17:43:12.413Z",
+      "note": "glx_duo"
     },
     {
       "key": "KEY-5P41L33I",
