@@ -121,9 +121,11 @@
     },
     {
       "key": "KEY-HDHRH6FA",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2026-01-15T08:43:17.223Z"
+      "createdAt": "2026-01-15T08:43:17.223Z",
+      "usedAt": "2026-01-16T13:56:58.176Z",
+      "boundProof": "ba20e1dbc0454e69906c4cd7dc66b55a1e7b2a0da202d4c014a0cbac2f2e1ed6"
     }
   ]
 }
