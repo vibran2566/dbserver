@@ -139,7 +139,8 @@
       "key": "KEY-DSEHU15F",
       "used": false,
       "revoked": false,
-      "createdAt": "2026-01-16T17:43:12.413Z"
+      "createdAt": "2026-01-16T17:43:12.413Z",
+      "note": "Doge"
     }
   ]
 }
