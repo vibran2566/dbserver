@@ -165,7 +165,8 @@
       "key": "KEY-3IHYV53D",
       "used": false,
       "revoked": false,
-      "createdAt": "2026-01-16T18:03:22.714Z"
+      "createdAt": "2026-01-16T18:03:22.714Z",
+      "note": "random"
     }
   ]
 }
