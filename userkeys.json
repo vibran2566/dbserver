@@ -123,7 +123,8 @@
       "revoked": false,
       "createdAt": "2026-01-16T14:02:36.614Z",
       "usedAt": "2026-01-16T17:23:11.795Z",
-      "boundProof": "922d62baf79ef1d6fe1af46f9de453b9f5fb8e9141a53f5c778cd3593629d254"
+      "boundProof": "922d62baf79ef1d6fe1af46f9de453b9f5fb8e9141a53f5c778cd3593629d254",
+      "lastUsedAt": "2026-01-16T17:23:36.335Z"
     }
   ]
 }
