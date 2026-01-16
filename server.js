@@ -173,14 +173,9 @@ function requireDashboardAuth(req, res, next) {
   // ok
   return next();
 }
-function loadUserKeys() {
+async function loadUserKeys() {
   try {
-    if (!fs.existsSync(USERKEYS_FILE_PATH)) {
-      return { keys: [] };
-    }
-    const raw = fs.readFileSync(USERKEYS_FILE_PATH, "utf8");
-    if (!raw.trim()) return { keys: [] };
-    const data = JSON.parse(raw);
+    const { data } = await ghLoad(USERKEYS_FILE_PATH, { keys: [] });
     if (!Array.isArray(data.keys)) data.keys = [];
     return data;
   } catch (e) {
@@ -189,22 +184,21 @@ function loadUserKeys() {
   }
 }
 
-function requireUsernameKey(req, res, next) {
+async function requireUsernameKey(req, res, next) {
   const auth = String(req.headers["authorization"] || "");
   if (!auth.startsWith("Bearer ")) {
-    return res.status(404).end(); // hide details
+    return res.status(404).end();
   }
 
   const key = auth.slice("Bearer ".length).trim();
   if (!key) return res.status(404).end();
 
-  const data = loadUserKeys();
+  const data = await loadUserKeys();
   const list = Array.isArray(data.keys) ? data.keys : [];
   const found = list.find(k => k.key === key && !k.revoked);
 
   if (!found) return res.status(404).end();
 
-  // optional: stash it if you need the record later
   req.userKey = key;
   req.userLicense = found;
   return next();
