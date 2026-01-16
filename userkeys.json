@@ -149,7 +149,8 @@
       "key": "KEY-AN541TDZ",
       "used": false,
       "revoked": false,
-      "createdAt": "2026-01-16T17:45:08.362Z"
+      "createdAt": "2026-01-16T17:45:08.362Z",
+      "note": "Cleaf"
     }
   ]
 }
