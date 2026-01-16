@@ -173,7 +173,8 @@
       "key": "KEY-V2YVPBDN",
       "used": false,
       "revoked": false,
-      "createdAt": "2026-01-16T19:16:30.182Z"
+      "createdAt": "2026-01-16T19:16:30.182Z",
+      "note": "mooky"
     }
   ]
 }
