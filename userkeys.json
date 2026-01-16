@@ -118,15 +118,6 @@
       "note": "Seb"
     },
     {
-      "key": "KEY-HDHRH6FA",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2026-01-15T08:43:17.223Z",
-      "lastUsedAt": "2026-01-16T17:22:08.263Z",
-      "usedAt": "2026-01-16T14:05:59.786Z",
-      "boundProof": "fa87ef97c0dde6cba04f771b95532ff37fe784df7143481176df75ed815df034"
-    },
-    {
       "key": "KEY-1B8RSXT6",
       "used": false,
       "revoked": false,
