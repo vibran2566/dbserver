@@ -121,7 +121,8 @@
       "key": "KEY-KAT4ZXLJ",
       "used": false,
       "revoked": false,
-      "createdAt": "2026-01-16T17:43:12.413Z"
+      "createdAt": "2026-01-16T17:43:12.413Z",
+      "note": "svn"
     },
     {
       "key": "KEY-FL7HA863",
