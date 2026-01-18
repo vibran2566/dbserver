@@ -14,19 +14,6 @@
       "boundProof": "9fb534fa9f0dd5c7f4806b7a239b55c5e60145a67cfcf9d3fc37a0ac5c142511"
     },
     {
-      "key": "KEY-P6EBRNIM",
-      "used": true,
-      "revoked": false,
-      "createdAt": "2025-10-29T20:22:09.129Z",
-      "lastUsedAt": "2025-12-07T23:28:47.189Z",
-      "note": "vibran PC",
-      "coreVersion": "1.1.1",
-      "requiredCore": "1.1.1",
-      "version": "1.1.1",
-      "usedAt": "2025-11-20T22:54:16.616Z",
-      "boundProof": "737ed8fc1412309f1144639f90fc29cc3f4a55a31995743d64a4fa3873ae9971"
-    },
-    {
       "key": "KEY-WJOHBZB6",
       "used": true,
       "revoked": false,
