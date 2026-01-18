@@ -126,10 +126,12 @@
     },
     {
       "key": "KEY-5P41L33I",
-      "used": false,
+      "used": true,
       "revoked": false,
       "createdAt": "2026-01-16T17:43:12.413Z",
-      "note": "damnbruh.com"
+      "note": "damnbruh.com",
+      "usedAt": "2026-01-18T02:00:25.420Z",
+      "boundProof": "8ecf03f334b55641d34492c6b0a4aad0281d6be4928ab3b901e324351d95dc48"
     },
     {
       "key": "KEY-DSEHU15F",
