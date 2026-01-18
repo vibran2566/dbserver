@@ -144,9 +144,11 @@
     },
     {
       "key": "KEY-TF1ZO106",
-      "used": false,
+      "used": true,
       "revoked": false,
-      "createdAt": "2026-01-18T02:48:59.874Z"
+      "createdAt": "2026-01-18T02:48:59.874Z",
+      "usedAt": "2026-01-18T02:49:23.509Z",
+      "boundProof": "fbe413e9e0e71202e4c53395913a12a290dd3a52ca6f6096adf5a05a3eae7e55"
     }
   ]
 }
