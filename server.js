@@ -372,7 +372,7 @@ const dbShardCache = Object.fromEntries(
 
 function dbToGamePlayersUrl(serverKey) {
   const [region, num] = serverKey.split('-');
-  return `https://damnbruh-game-server-instance-${num}-${region}.onrender.com/players`;
+  return `https://damnbruh-${region}-${num}.fly.dev/players`;
 }
 function dbRegion(serverKey) { return serverKey.startsWith('us-') ? 'US' : 'EU'; }
 function nowMs() { return Date.now(); }
