@@ -734,81 +734,103 @@ app.get("/api/user/admin/all-usernames", (req, res) => {
 
 
 
-app.get("/api/user/admin/all-activity", async (req, res) => {
-  // --- Security check
-  if (req.header("admin-token") !== ADMIN_TOKEN)
-    return res.status(401).json({ ok: false, error: "unauthorized" });
+app.get('/all-activity', async (req, res) => {
+    try {
+        const activities = await Activity.find()
+            .populate('user', 'id')
+            .sort({ timestamp: -1 })
+            .lean();
 
-  try {
-    // --- 1. Load all player data
-    const files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith(".json"));
-    const players = {};
+        const activityData = activities.reduce((acc, activity) => {
+            const userId = activity.user?.id;
+            if (!userId) return acc;
 
-    for (const f of files) {
-      const did = decodeURIComponent(f.slice(0, -5));
-      const data = JSON.parse(fs.readFileSync(path.join(PLAYER_DIR, f), "utf8"));
-      players[did] = sanitizePlayerForMapping(data);
+            if (!acc[userId]) {
+                acc[userId] = {
+                    count: 0,
+                    usernames: {},
+                    regions: {}
+                };
+            }
+
+            acc[userId].count++;
+
+            if (activity.username) {
+                acc[userId].usernames[activity.username] = 
+                    (acc[userId].usernames[activity.username] || 0) + 1;
+            }
+
+            if (activity.region) {
+                acc[userId].regions[activity.region] = 
+                    (acc[userId].regions[activity.region] || 0) + 1;
+            }
+
+            return acc;
+        }, {});
+
+        // Get all unique user IDs
+        const userIds = Object.keys(activityData);
+
+        // Fetch user data for all users
+        const users = await User.find({ 
+            id: { $in: userIds } 
+        }).select('id realName').lean();
+
+        const userMap = users.reduce((map, user) => {
+            map[user.id] = user;
+            return map;
+        }, {});
+
+        // Build comprehensive stats for each user
+        const userStats = {};
+
+        userIds.forEach(userId => {
+            const data = activityData[userId];
+            const user = userMap[userId];
+
+            // Get top usernames
+            const topUsernames = Object.entries(data.usernames)
+                .sort((a, b) => b[1] - a[1])
+                .map(([name, count]) => ({ name, count }));
+
+            // Get region counts
+            const regionCounts = {
+                US: data.regions['US'] || 0,
+                EU: data.regions['EU'] || 0
+            };
+
+            // Determine top region
+            const topRegion = regionCounts.US >= regionCounts.EU ? 'US' : 'EU';
+
+            userStats[userId] = {
+                realName: user?.realName || null,
+                usernames: data.usernames,
+                topUsernames,
+                regionCounts,
+                topRegion,
+                activityByWindow: {}
+            };
+        });
+
+        // Now process activities to populate activityByWindow
+        activities.forEach(activity => {
+            const did = activity.user?.id;
+            if (!did || !userStats[did]) return;
+            
+            const timestamp = new Date(activity.timestamp);
+            const timeWindow = getTimeWindow(timestamp);
+            
+            if (!userStats[did].activityByWindow[timeWindow]) {
+                userStats[did].activityByWindow[timeWindow] = 0;
+            }
+            userStats[did].activityByWindow[timeWindow]++;
+        });
+
+        res.json(userStats);
+    } catch (error) {
+        console.error('Error fetching all activity:', error);
+        res.status(500).json({ error: 'Failed to fetch activity data' });
     }
-
-    // --- 2. Fetch overlay activity for multiple windows
-    const windows = ["1h", "6h", "12h", "24h"];
-    const tzOffsetMin = 300; // UTC-5 (EST)
-    const timeframeData = {};
-
-    for (const window of windows) {
-      try {
-        const resp = await fetch(
-          `https://dbserver-8bhx.onrender.com/api/overlay/activity/batch?window=${window}&tzOffsetMin=${tzOffsetMin}`,
-          {
-            headers: { "Authorization": "Bearer KEY-D7CDUFG0" }
-          }
-        );
-
-        const text = await resp.text();
-        let json;
-        try {
-          json = JSON.parse(text);
-        } catch {
-          console.error(`Non-JSON response for ${window}:`, text.slice(0, 200));
-          continue;
-        }
-
-        if (json.ok && json.activity) {
-          timeframeData[window] = json.activity;
-        } else {
-          console.warn(`No valid activity for ${window}`, json);
-          timeframeData[window] = {};
-        }
-      } catch (err) {
-        console.error(`Overlay fetch failed for ${window}`, err);
-        timeframeData[window] = {};
-      }
-    }
-
-    // --- 3. Merge activity into each player, with defaults
-    for (const [did, player] of Object.entries(players)) {
-      player.activityByWindow = {};
-
-      for (const window of Object.keys(timeframeData)) {
-        const act = timeframeData[window][did];
-        player.activityByWindow[window] = act
-          ? { ...act, hasData: true }
-          : { isOnline: false, durationMin: 0, lastSeen: null, hasData: false };
-      }
-    }
-
-    // --- 4. Respond with the full dataset
-    res.json({
-      ok: true,
-      total: files.length,
-      updatedAt: Date.now(),
-      includesTimeframes: true,
-      players
-    });
-  } catch (err) {
-    console.error("Error in /api/user/admin/all-activity:", err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
 });
 
 
