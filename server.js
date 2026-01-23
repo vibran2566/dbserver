@@ -732,6 +732,59 @@ app.get("/api/user/admin/all-usernames", (req, res) => {
   }
 });
 
+app.get("/api/user/admin/all-activity", async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+
+  try {
+    // 1. Load player username data from player directory
+    const files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith(".json"));
+    const players = {};
+
+    for (const f of files) {
+      const did = decodeURIComponent(f.slice(0, -5));
+      const data = JSON.parse(fs.readFileSync(path.join(PLAYER_DIR, f), "utf8"));
+      players[did] = sanitizePlayerForMapping(data);
+    }
+
+    // 2. Fetch all timeframe data from the overlay endpoint
+    //    Adjust window or timezone as desired
+    const windows = ["1h", "6h", "12h", "24h"]; // collect multiple timeframes
+    const tzOffsetMin = 300; // UTC-5 (EST)
+    const timeframeData = {};
+
+    for (const window of windows) {
+      const resp = await fetch(
+        `https://dbserver-8bhx.onrender.com/api/overlay/activity/batch?window=${window}&tzOffsetMin=${tzOffsetMin}`
+      );
+      const json = await resp.json();
+      timeframeData[window] = json.activity || {};
+    }
+
+    // 3. Merge activity data into player objects
+    for (const [did, player] of Object.entries(players)) {
+      player.activityByWindow = {};
+
+      for (const [window, activityMap] of Object.entries(timeframeData)) {
+        if (activityMap[did]) {
+          player.activityByWindow[window] = activityMap[did];
+        }
+      }
+    }
+
+    // 4. Respond with all players, including Privy IDs and full timeframe activity
+    res.json({
+      ok: true,
+      total: files.length,
+      updatedAt: Date.now(),
+      includesTimeframes: true,
+      players
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 app.get("/api/game/usernames", requireUsernameKey, (req, res) => {
   try {
