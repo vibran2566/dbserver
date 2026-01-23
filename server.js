@@ -714,6 +714,23 @@ app.post("/api/overlay/activity/batch", requireUsernameKey, express.json(), (req
   }
 });
 
+app.get("/api/user/admin/all-usernames", (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+
+  try {
+    const files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith(".json"));
+    const players = {};
+    for (const f of files) {
+      const did = decodeURIComponent(f.slice(0, -5));
+      const data = JSON.parse(fs.readFileSync(path.join(PLAYER_DIR, f), "utf8"));
+      players[did] = sanitizePlayerForMapping(data);
+    }
+    res.json({ ok: true, total: files.length, players });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
 
 app.get("/api/game/usernames", requireUsernameKey, (req, res) => {
