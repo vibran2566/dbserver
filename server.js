@@ -733,21 +733,24 @@ app.get("/api/user/admin/all-usernames", (req, res) => {
 });
 
 
+
 app.get("/api/user/admin/all-activity", async (req, res) => {
+  // --- Security check
   if (req.header("admin-token") !== ADMIN_TOKEN)
     return res.status(401).json({ ok: false, error: "unauthorized" });
 
   try {
-    // 1. Load all player data from player directory
+    // --- 1. Load all player data
     const files = fs.readdirSync(PLAYER_DIR).filter(f => f.endsWith(".json"));
     const players = {};
+
     for (const f of files) {
       const did = decodeURIComponent(f.slice(0, -5));
       const data = JSON.parse(fs.readFileSync(path.join(PLAYER_DIR, f), "utf8"));
       players[did] = sanitizePlayerForMapping(data);
     }
 
-    // 2. Collect multiple timeframe activity batches
+    // --- 2. Fetch overlay activity for multiple windows
     const windows = ["1h", "6h", "12h", "24h"];
     const tzOffsetMin = 300; // UTC-5 (EST)
     const timeframeData = {};
@@ -757,9 +760,7 @@ app.get("/api/user/admin/all-activity", async (req, res) => {
         const resp = await fetch(
           `https://dbserver-8bhx.onrender.com/api/overlay/activity/batch?window=${window}&tzOffsetMin=${tzOffsetMin}`,
           {
-            headers: {
-              "Authorization": "Bearer KEY-D7CDUFG0"
-            }
+            headers: { "Authorization": "Bearer KEY-D7CDUFG0" }
           }
         );
 
@@ -767,7 +768,7 @@ app.get("/api/user/admin/all-activity", async (req, res) => {
         let json;
         try {
           json = JSON.parse(text);
-        } catch (err) {
+        } catch {
           console.error(`Non-JSON response for ${window}:`, text.slice(0, 200));
           continue;
         }
@@ -775,25 +776,28 @@ app.get("/api/user/admin/all-activity", async (req, res) => {
         if (json.ok && json.activity) {
           timeframeData[window] = json.activity;
         } else {
-          console.warn(`No valid activity data for window ${window}:`, json);
+          console.warn(`No valid activity for ${window}`, json);
+          timeframeData[window] = {};
         }
-      } catch (fetchErr) {
-        console.error(`Failed to fetch overlay data for ${window}:`, fetchErr);
+      } catch (err) {
+        console.error(`Overlay fetch failed for ${window}`, err);
+        timeframeData[window] = {};
       }
     }
 
-    // 3. Merge activity data into each player
+    // --- 3. Merge activity into each player, with defaults
     for (const [did, player] of Object.entries(players)) {
       player.activityByWindow = {};
 
-      for (const [window, activityMap] of Object.entries(timeframeData)) {
-        if (activityMap[did]) {
-          player.activityByWindow[window] = activityMap[did];
-        }
+      for (const window of Object.keys(timeframeData)) {
+        const act = timeframeData[window][did];
+        player.activityByWindow[window] = act
+          ? { ...act, hasData: true }
+          : { isOnline: false, durationMin: 0, lastSeen: null, hasData: false };
       }
     }
 
-    // 4. Return the complete dataset
+    // --- 4. Respond with the full dataset
     res.json({
       ok: true,
       total: files.length,
@@ -806,6 +810,7 @@ app.get("/api/user/admin/all-activity", async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
 
 app.get("/api/game/usernames", requireUsernameKey, (req, res) => {
   try {
