@@ -732,7 +732,17 @@ app.get("/api/user/admin/all-usernames", (req, res) => {
   }
 });
 
-
+// Add this function before your /all-activity endpoint
+function getTimeWindow(date) {
+    const hour = date.getHours();
+    
+    if (hour >= 0 && hour < 6) return '12am-6am';
+    if (hour >= 6 && hour < 12) return '6am-12pm';
+    if (hour >= 12 && hour < 18) return '12pm-6pm';
+    if (hour >= 18 && hour < 24) return '6pm-12am';
+    
+    return 'unknown';
+}
 
 app.get('/all-activity', async (req, res) => {
     try {
