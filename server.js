@@ -745,6 +745,8 @@ function getTimeWindow(date) {
 }
 
 app.get('/all-activity', async (req, res) => {
+  if (req.header("admin-token") !== ADMIN_TOKEN)
+        return res.status(401).json({ error: "unauthorized" });
     try {
         const files = getPlayerFilesCached();
         const userStats = {};
