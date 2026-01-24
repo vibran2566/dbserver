@@ -746,95 +746,30 @@ function getTimeWindow(date) {
 
 app.get('/all-activity', async (req, res) => {
     try {
-        const activities = await Activity.find()
-            .populate('user', 'id')
-            .sort({ timestamp: -1 })
-            .lean();
-
-        const activityData = activities.reduce((acc, activity) => {
-            const userId = activity.user?.id;
-            if (!userId) return acc;
-
-            if (!acc[userId]) {
-                acc[userId] = {
-                    count: 0,
-                    usernames: {},
-                    regions: {}
-                };
-            }
-
-            acc[userId].count++;
-
-            if (activity.username) {
-                acc[userId].usernames[activity.username] = 
-                    (acc[userId].usernames[activity.username] || 0) + 1;
-            }
-
-            if (activity.region) {
-                acc[userId].regions[activity.region] = 
-                    (acc[userId].regions[activity.region] || 0) + 1;
-            }
-
-            return acc;
-        }, {});
-
-        // Get all unique user IDs
-        const userIds = Object.keys(activityData);
-
-        // Fetch user data for all users
-        const users = await User.find({ 
-            id: { $in: userIds } 
-        }).select('id realName').lean();
-
-        const userMap = users.reduce((map, user) => {
-            map[user.id] = user;
-            return map;
-        }, {});
-
-        // Build comprehensive stats for each user
+        const files = getPlayerFilesCached();
         const userStats = {};
 
-        userIds.forEach(userId => {
-            const data = activityData[userId];
-            const user = userMap[userId];
+        for (const f of files) {
+            const did = decodeURIComponent(f.slice(0, -5)); // remove .json
+            const p = getPlayerCached(did, false) || loadPlayerIfExists(did);
+            if (!p) continue;
 
             // Get top usernames
-            const topUsernames = Object.entries(data.usernames)
+            const topUsernames = Object.entries(p.usernames || {})
                 .sort((a, b) => b[1] - a[1])
                 .map(([name, count]) => ({ name, count }));
 
-            // Get region counts
-            const regionCounts = {
-                US: data.regions['US'] || 0,
-                EU: data.regions['EU'] || 0
-            };
-
-            // Determine top region
-            const topRegion = regionCounts.US >= regionCounts.EU ? 'US' : 'EU';
-
-            userStats[userId] = {
-                realName: user?.realName || null,
-                usernames: data.usernames,
+            userStats[did] = {
+                realName: p.realName || null,
+                usernames: p.usernames || {},
                 topUsernames,
-                regionCounts,
-                topRegion,
-                activityByWindow: {}
+                regionCounts: p.regionCounts || { US: 0, EU: 0 },
+                topRegion: p.topRegion || null,
+                firstSeen: p.firstSeen || null,
+                lastSeen: p.lastSeen || p.lastSeenActivity || null,
+                sessions: p.sessions || []
             };
-        });
-
-        // Now process activities to populate activityByWindow
-        activities.forEach(activity => {
-            const did = activity.user?.id;
-            if (!did || !userStats[did]) return;
-            
-            const timestamp = new Date(activity.timestamp);
-            const timeWindow = getTimeWindow(timestamp);
-            
-            if (!userStats[did].activityByWindow[timeWindow]) {
-                userStats[did].activityByWindow[timeWindow] = 0;
-            }
-            userStats[did].activityByWindow[timeWindow]++;
-        });
+        }
 
         res.json(userStats);
     } catch (error) {
